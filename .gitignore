@@ -9,3 +9,6 @@
 .externalNativeBuild
 .cxx
 *.log
+
+app/release.jks
+*.jks

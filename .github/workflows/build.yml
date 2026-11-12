@@ -23,6 +23,23 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
+      - name: Restore signing key
+        env:
+          KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ] && [ -n "$KEYSTORE_PASSWORD" ] && [ -n "$KEY_ALIAS" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > app/release.jks
+            echo "KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
+            echo "KEY_ALIAS=$KEY_ALIAS" >> "$GITHUB_ENV"
+          elif [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            echo "::error title=Missing signing secrets::Add KEYSTORE_B64, KEYSTORE_PASSWORD and KEY_ALIAS in Settings > Secrets and variables > Actions before releasing."
+            exit 1
+          else
+            echo "::warning::No signing secrets, using the debug key for this build."
+          fi
+
       - name: Resolve version
         run: |
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
