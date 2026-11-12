@@ -179,8 +179,8 @@ fun LibraryScreen(
                 AnimatedContent(
                     targetState = subtitle,
                     transitionSpec = {
-                        (slideInVertically(Motion.soft()) { it / 2 } + fadeIn(tween(600, easing = Motion.Silk))) togetherWith
-                            (slideOutVertically(Motion.soft()) { -it / 2 } + fadeOut(tween(600, easing = Motion.Silk)))
+                        (slideInVertically(Motion.soft()) { it / 2 } + fadeIn(tween(260, easing = Motion.Silk))) togetherWith
+                            (slideOutVertically(Motion.soft()) { -it / 2 } + fadeOut(tween(260, easing = Motion.Silk)))
                     },
                     label = "subtitle",
                 ) { s -> Text(s, fontSize = 14.sp, color = Ui.Muted) }
@@ -224,8 +224,8 @@ fun LibraryScreen(
                     targetState = tab,
                     transitionSpec = {
                         val dir = if (targetState > initialState) 1 else -1
-                        (slideInHorizontally(tween(832, easing = Motion.Silk)) { dir * it / 5 } + fadeIn(tween(624, easing = Motion.Silk))) togetherWith
-                            (slideOutHorizontally(tween(600, easing = Motion.Silk)) { -dir * it / 6 } + fadeOut(tween(600, easing = Motion.Silk)))
+                        (slideInHorizontally(tween(416, easing = Motion.Silk)) { dir * it / 5 } + fadeIn(tween(312, easing = Motion.Silk))) togetherWith
+                            (slideOutHorizontally(tween(260, easing = Motion.Silk)) { -dir * it / 6 } + fadeOut(tween(260, easing = Motion.Silk)))
                     },
                     label = "tabs",
                 ) { t ->
@@ -239,11 +239,11 @@ fun LibraryScreen(
                             targetState = openFolder,
                             transitionSpec = {
                                 if (targetState != null) {
-                                    (slideInHorizontally(tween(832, easing = Motion.Silk)) { it / 3 } + fadeIn(tween(624, easing = Motion.Silk))) togetherWith
-                                        (slideOutHorizontally(tween(676, easing = Motion.Silk)) { -it / 5 } + fadeOut(tween(600, easing = Motion.Silk)))
+                                    (slideInHorizontally(tween(416, easing = Motion.Silk)) { it / 3 } + fadeIn(tween(312, easing = Motion.Silk))) togetherWith
+                                        (slideOutHorizontally(tween(338, easing = Motion.Silk)) { -it / 5 } + fadeOut(tween(260, easing = Motion.Silk)))
                                 } else {
-                                    (slideInHorizontally(tween(832, easing = Motion.Silk)) { -it / 5 } + fadeIn(tween(624, easing = Motion.Silk))) togetherWith
-                                        (slideOutHorizontally(tween(676, easing = Motion.Silk)) { it / 3 } + fadeOut(tween(600, easing = Motion.Silk)))
+                                    (slideInHorizontally(tween(416, easing = Motion.Silk)) { -it / 5 } + fadeIn(tween(312, easing = Motion.Silk))) togetherWith
+                                        (slideOutHorizontally(tween(338, easing = Motion.Silk)) { it / 3 } + fadeOut(tween(260, easing = Motion.Silk)))
                                 }
                             },
                             label = "folders",
@@ -326,7 +326,7 @@ private fun SortMenu(
                 asc = asc,
             ) {
                 onSort(SortField.Alphabet)
-                scope.launch { delay(450); onDismiss() }
+                scope.launch { delay(300); onDismiss() }
             }
             Spacer(Modifier.height(4.dp))
             SortOption(
@@ -337,7 +337,7 @@ private fun SortMenu(
                 asc = asc,
             ) {
                 onSort(SortField.DateAdded)
-                scope.launch { delay(450); onDismiss() }
+                scope.launch { delay(300); onDismiss() }
             }
         }
     }
@@ -352,7 +352,7 @@ private fun SortOption(
     asc: Boolean,
     onClick: () -> Unit,
 ) {
-    val bg by animateColorAsState(if (selected) Ui.GreenTint else Color.Transparent, tween(600, easing = Motion.Silk), label = "sortbg")
+    val bg by animateColorAsState(if (selected) Ui.GreenTint else Color.Transparent, tween(260, easing = Motion.Silk), label = "sortbg")
     val rot by animateFloatAsState(if (asc) 0f else 180f, Motion.soft(), label = "sortrot")
     Row(
         Modifier
@@ -437,8 +437,8 @@ private fun SongRow(
             shown = true
         }
     }
-    val a by animateFloatAsState(if (shown) 1f else 0f, tween(1092, easing = Motion.Silk), label = "rowa")
-    val bg by animateColorAsState(if (isCurrent) Ui.GreenTint else Ui.Card, tween(780, easing = Motion.Silk), label = "rowbg")
+    val a by animateFloatAsState(if (shown) 1f else 0f, tween(450, easing = Motion.Silk), label = "rowa")
+    val bg by animateColorAsState(if (isCurrent) Ui.GreenTint else Ui.Card, tween(390, easing = Motion.Silk), label = "rowbg")
     Row(
         modifier
             .graphicsLayer { alpha = a; translationY = (1f - a) * 26.dp.toPx() }

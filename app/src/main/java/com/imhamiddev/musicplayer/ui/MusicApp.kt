@@ -249,8 +249,8 @@ fun MusicApp(vm: MainViewModel) {
 
         AnimatedVisibility(
             visible = playerOpen && current != null,
-            enter = slideInVertically(Motion.soft()) { it } + fadeIn(tween(600, easing = Motion.Silk)),
-            exit = slideOutVertically(tween(728, easing = Motion.Silk)) { it } + fadeOut(tween(600, easing = Motion.Silk)),
+            enter = slideInVertically(Motion.soft()) { it } + fadeIn(tween(260, easing = Motion.Silk)),
+            exit = slideOutVertically(tween(364, easing = Motion.Silk)) { it } + fadeOut(tween(260, easing = Motion.Silk)),
         ) {
             current?.let { song ->
                 PlayerScreen(
@@ -387,7 +387,7 @@ private fun PermissionScreen(denied: Boolean, onClick: () -> Unit) {
     ) {
         AnimatedVisibility(
             visible = shown,
-            enter = slideInVertically(Motion.soft()) { it / 6 } + fadeIn(tween(1040, easing = Motion.Silk)),
+            enter = slideInVertically(Motion.soft()) { it / 6 } + fadeIn(tween(450, easing = Motion.Silk)),
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Box(
