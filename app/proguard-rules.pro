@@ -1,0 +1,7 @@
+-dontwarn com.google.errorprone.annotations.**
+-dontwarn javax.annotation.**
+-dontwarn org.checkerframework.**
+-dontwarn org.codehaus.mojo.animal_sniffer.*
+-dontwarn com.google.j2objc.annotations.**
+-dontwarn sun.misc.Unsafe
+-dontwarn java.lang.ClassValue

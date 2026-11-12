@@ -1,0 +1,467 @@
+package com.imhamiddev.musicplayer.ui
+
+import android.content.ContentUris
+import android.graphics.BitmapFactory
+import android.net.Uri
+import android.os.Build
+import android.util.LruCache
+import android.util.Size
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.FavoriteBorder
+import androidx.compose.material.icons.rounded.MusicNote
+import androidx.compose.material.icons.rounded.Pause
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.imhamiddev.musicplayer.data.Song
+import kotlin.math.PI
+import kotlin.math.abs
+import kotlin.math.sin
+import kotlin.random.Random
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+
+fun fmt(ms: Long): String {
+    val s = (ms / 1000).coerceAtLeast(0)
+    return "%d:%02d".format(s / 60, s % 60)
+}
+
+// ---- Micro-interaction primitives ----------------------------------------------------------
+
+/** Springy press feedback + click, without ripple (matches the soft, tactile feel of the reference). */
+fun Modifier.bouncyClick(
+    pressedScale: Float = 0.92f,
+    enabled: Boolean = true,
+    onClick: () -> Unit,
+): Modifier = composed {
+    val src = remember { MutableInteractionSource() }
+    val pressed by src.collectIsPressedAsState()
+    val s by animateFloatAsState(
+        targetValue = if (pressed) pressedScale else 1f,
+        animationSpec = spring(dampingRatio = 0.5f, stiffness = 500f),
+        label = "press",
+    )
+    this
+        .graphicsLayer { scaleX = s; scaleY = s }
+        .clickable(interactionSource = src, indication = null, enabled = enabled, onClick = onClick)
+}
+
+@Composable
+fun IconCircle(
+    icon: ImageVector,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    size: Dp = 44.dp,
+    container: Color = Ui.Tile,
+    tint: Color = Ui.Ink,
+    iconSize: Dp = 22.dp,
+    description: String? = null,
+) {
+    Box(
+        modifier
+            .size(size)
+            .bouncyClick(onClick = onClick)
+            .clip(CircleShape)
+            .background(container),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(icon, description, tint = tint, modifier = Modifier.size(iconSize))
+    }
+}
+
+@Composable
+fun PlayPauseIcon(playing: Boolean, tint: Color, size: Dp) {
+    AnimatedContent(
+        targetState = playing,
+        transitionSpec = {
+            (fadeIn(tween(160)) + scaleIn(animationSpec = spring(0.55f, 500f), initialScale = 0.4f)) togetherWith
+                (fadeOut(tween(100)) + scaleOut(animationSpec = tween(120), targetScale = 0.4f))
+        },
+        label = "playpause",
+    ) { p ->
+        Icon(
+            if (p) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+            contentDescription = if (p) "Pause" else "Play",
+            tint = tint,
+            modifier = Modifier.size(size),
+        )
+    }
+}
+
+@Composable
+fun HeartButton(
+    fav: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    size: Dp = 40.dp,
+    idleTint: Color = Ui.Ink.copy(alpha = 0.5f),
+) {
+    val scale = remember { Animatable(1f) }
+    var prev by remember { mutableStateOf(fav) }
+    LaunchedEffect(fav) {
+        if (fav && !prev) {
+            scale.snapTo(0.55f)
+            scale.animateTo(1f, spring(dampingRatio = 0.3f, stiffness = 380f))
+        }
+        prev = fav
+    }
+    val tint by animateColorAsState(if (fav) Ui.Pink else idleTint, tween(220), label = "heart")
+    Box(modifier.size(size).bouncyClick(0.85f, onClick = onClick), contentAlignment = Alignment.Center) {
+        Icon(
+            if (fav) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+            contentDescription = "Favorite",
+            tint = tint,
+            modifier = Modifier
+                .size(size * 0.58f)
+                .graphicsLayer { scaleX = scale.value; scaleY = scale.value },
+        )
+    }
+}
+
+// ---- Segmented tabs (sliding white pill indicator) -----------------------------------------
+
+@Composable
+fun SegmentedTabs(
+    labels: List<String>,
+    selected: Int,
+    onSelect: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val shape = RoundedCornerShape(50)
+    BoxWithConstraints(
+        modifier
+            .height(50.dp)
+            .clip(shape)
+            .background(Ui.TileDeep.copy(alpha = 0.7f))
+            .padding(4.dp),
+    ) {
+        val tabW = maxWidth / labels.size
+        val x by animateDpAsState(tabW * selected, spring(dampingRatio = 0.78f, stiffness = 380f), label = "tabx")
+        Box(
+            Modifier
+                .offset(x = x)
+                .width(tabW)
+                .fillMaxHeight()
+                .shadow(6.dp, shape, ambientColor = Color.Black.copy(0.08f), spotColor = Color.Black.copy(0.14f))
+                .clip(shape)
+                .background(Color.White),
+        )
+        Row(Modifier.fillMaxSize()) {
+            labels.forEachIndexed { i, label ->
+                val color by animateColorAsState(if (i == selected) Ui.Ink else Ui.Muted, tween(200), label = "tabc")
+                Box(
+                    Modifier.weight(1f).fillMaxHeight().bouncyClick(0.94f) { onSelect(i) },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(label, color = color, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                }
+            }
+        }
+    }
+}
+
+// ---- Search pill with live result-count badge ----------------------------------------------
+
+@Composable
+fun SearchPill(query: String, onQuery: (String) -> Unit, resultCount: Int, modifier: Modifier = Modifier) {
+    val focus = LocalFocusManager.current
+    val shape = RoundedCornerShape(50)
+    Row(
+        modifier
+            .fillMaxWidth()
+            .height(56.dp)
+            .shadow(10.dp, shape, ambientColor = Color.Black.copy(0.05f), spotColor = Color.Black.copy(0.09f))
+            .clip(shape)
+            .background(Color.White)
+            .padding(start = 18.dp, end = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Icons.Rounded.Search, null, tint = Ui.Muted, modifier = Modifier.size(22.dp))
+        Spacer(Modifier.width(10.dp))
+        Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+            if (query.isEmpty()) {
+                Text("Search songs, artists, albums", color = Ui.Muted, fontSize = 15.sp, maxLines = 1)
+            }
+            BasicTextField(
+                value = query,
+                onValueChange = onQuery,
+                singleLine = true,
+                textStyle = TextStyle(color = Ui.Ink, fontSize = 16.sp),
+                cursorBrush = SolidColor(Ui.GreenA),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                keyboardActions = KeyboardActions(onSearch = { focus.clearFocus() }),
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        AnimatedVisibility(
+            visible = query.isNotEmpty(),
+            enter = scaleIn(animationSpec = spring(0.55f, 400f), initialScale = 0.5f) + fadeIn(),
+            exit = scaleOut(targetScale = 0.5f) + fadeOut(),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    Modifier
+                        .clip(RoundedCornerShape(50))
+                        .background(Ui.GreenBrush)
+                        .padding(horizontal = 14.dp, vertical = 8.dp),
+                ) {
+                    AnimatedContent(
+                        targetState = resultCount,
+                        transitionSpec = {
+                            (slideInVertically { it } + fadeIn()) togetherWith (slideOutVertically { -it } + fadeOut())
+                        },
+                        label = "count",
+                    ) { n ->
+                        Text(
+                            if (n == 1) "1 result" else "$n results",
+                            color = Ui.Ink, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+                        )
+                    }
+                }
+                Spacer(Modifier.width(6.dp))
+                IconCircle(Icons.Rounded.Close, { onQuery("") }, size = 34.dp, iconSize = 18.dp, description = "Clear")
+            }
+        }
+    }
+}
+
+// ---- Equalizer bars (now playing indicator) ------------------------------------------------
+
+@Composable
+fun EqualizerBars(playing: Boolean, modifier: Modifier = Modifier) {
+    val t = rememberInfiniteTransition(label = "eq")
+    val a by t.animateFloat(0.25f, 1f, infiniteRepeatable(tween(520), RepeatMode.Reverse), label = "a")
+    val b by t.animateFloat(0.25f, 1f, infiniteRepeatable(tween(380), RepeatMode.Reverse), label = "b")
+    val c by t.animateFloat(0.25f, 1f, infiniteRepeatable(tween(450), RepeatMode.Reverse), label = "c")
+    val live by animateFloatAsState(if (playing) 1f else 0f, tween(300), label = "live")
+    Row(
+        modifier.height(18.dp),
+        horizontalArrangement = Arrangement.spacedBy(3.dp),
+        verticalAlignment = Alignment.Bottom,
+    ) {
+        listOf(a, b, c).forEach { h ->
+            val f = 0.25f + (h - 0.25f) * live
+            Box(
+                Modifier
+                    .width(4.dp)
+                    .fillMaxHeight(f)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(Ui.GreenBrush),
+            )
+        }
+    }
+}
+
+// ---- Album art -----------------------------------------------------------------------------
+
+private val artCache = LruCache<String, ImageBitmap>(96)
+
+private val palettes = listOf(
+    listOf(Color(0xFFF472B6), Color(0xFFFB7185)),
+    listOf(Color(0xFF34D399), Color(0xFFA3E635)),
+    listOf(Color(0xFF60A5FA), Color(0xFF818CF8)),
+    listOf(Color(0xFFFBBF24), Color(0xFFFB923C)),
+    listOf(Color(0xFF3A3A3A), Color(0xFF6B6B6B)),
+)
+
+private fun loadArt(ctx: android.content.Context, song: Song, size: Int): ImageBitmap? = try {
+    val bmp = if (Build.VERSION.SDK_INT >= 29) {
+        ctx.contentResolver.loadThumbnail(song.uri, Size(size, size), null)
+    } else {
+        val uri = ContentUris.withAppendedId(Uri.parse("content://media/external/audio/albumart"), song.albumId)
+        ctx.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) }
+    }
+    bmp?.asImageBitmap()
+} catch (_: Exception) {
+    null
+}
+
+@Composable
+fun AlbumArt(
+    song: Song?,
+    modifier: Modifier = Modifier,
+    shape: Shape = RoundedCornerShape(14.dp),
+    sizePx: Int = 192,
+) {
+    val ctx = LocalContext.current
+    val key = song?.let { "${it.id}_$sizePx" }
+    var bmp by remember(key) { mutableStateOf(key?.let { artCache.get(it) }) }
+    LaunchedEffect(key) {
+        if (song != null && key != null && bmp == null) {
+            val loaded = withContext(Dispatchers.IO) { loadArt(ctx, song, sizePx) }
+            if (loaded != null) {
+                artCache.put(key, loaded)
+                bmp = loaded
+            }
+        }
+    }
+    val colors = palettes[(song?.id ?: 0L).mod(palettes.size.toLong()).toInt()]
+    Box(
+        modifier.clip(shape).background(Brush.linearGradient(colors)),
+        contentAlignment = Alignment.Center,
+    ) {
+        Crossfade(targetState = bmp, animationSpec = tween(280), modifier = Modifier.fillMaxSize(), label = "art") { b ->
+            if (b != null) {
+                Image(bitmap = b, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+            } else {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Rounded.MusicNote, null, tint = Color.White.copy(alpha = 0.92f), modifier = Modifier.fillMaxSize(0.46f))
+                }
+            }
+        }
+    }
+}
+
+// ---- Waveform scrubber (inspired by the voice-note card) -----------------------------------
+
+@Composable
+fun Waveform(
+    seed: Long,
+    progress: Float,
+    playing: Boolean,
+    onSeek: (Float) -> Unit,
+    modifier: Modifier = Modifier,
+    bars: Int = 46,
+    unplayed: Color = Color.White.copy(alpha = 0.2f),
+) {
+    val heights = remember(seed, bars) {
+        val r = Random(seed)
+        List(bars) { i ->
+            val base = 0.3f + 0.7f * r.nextFloat()
+            val env = 0.72f + 0.28f * sin(i * 0.38f + (seed % 11).toFloat())
+            (base * env).coerceIn(0.16f, 1f)
+        }
+    }
+    var dragging by remember { mutableStateOf(false) }
+    var dragFrac by remember { mutableFloatStateOf(0f) }
+    val smooth by animateFloatAsState(progress, tween(260, easing = LinearEasing), label = "wfp")
+    val live by animateFloatAsState(if (playing) 1f else 0f, tween(300), label = "wfl")
+    val inf = rememberInfiniteTransition(label = "wf")
+    val phase by inf.animateFloat(0f, (2 * PI).toFloat(), infiniteRepeatable(tween(1400, easing = LinearEasing)), label = "phase")
+
+    Canvas(
+        modifier
+            .pointerInput(Unit) {
+                detectTapGestures { off -> onSeek((off.x / size.width).coerceIn(0f, 1f)) }
+            }
+            .pointerInput(Unit) {
+                detectHorizontalDragGestures(
+                    onDragStart = { off ->
+                        dragging = true
+                        dragFrac = (off.x / size.width).coerceIn(0f, 1f)
+                    },
+                    onDragEnd = {
+                        dragging = false
+                        onSeek(dragFrac)
+                    },
+                    onDragCancel = { dragging = false },
+                    onHorizontalDrag = { change, _ ->
+                        change.consume()
+                        dragFrac = (change.position.x / size.width).coerceIn(0f, 1f)
+                    },
+                )
+            },
+    ) {
+        val n = heights.size
+        val slot = size.width / n
+        val stroke = slot * 0.54f
+        val shown = if (dragging) dragFrac else smooth
+        val brush = Brush.horizontalGradient(listOf(Ui.GreenA, Ui.GreenB), startX = 0f, endX = size.width)
+        val midY = size.height / 2f
+        for (i in 0 until n) {
+            val x = slot * (i + 0.5f)
+            val played = (i + 0.5f) / n <= shown
+            var h = heights[i]
+            val dist = abs(i - shown * n)
+            if (live > 0f && dist < 7f) h *= 1f + 0.2f * live * sin(phase + i * 0.7f) * (1f - dist / 7f)
+            val half = (size.height * 0.5f * h.coerceAtMost(1f)).coerceAtLeast(stroke / 2f)
+            if (played) {
+                drawLine(brush, Offset(x, midY - half), Offset(x, midY + half), stroke, StrokeCap.Round)
+            } else {
+                drawLine(unplayed, Offset(x, midY - half), Offset(x, midY + half), stroke, StrokeCap.Round)
+            }
+        }
+    }
+}
