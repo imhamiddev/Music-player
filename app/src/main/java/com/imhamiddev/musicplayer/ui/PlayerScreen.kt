@@ -45,6 +45,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -183,7 +184,7 @@ fun PlayerScreen(
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp)
                     .clip(RoundedCornerShape(36.dp))
-                    .background(Ui.Ink)
+                    .background(Ui.Deck)
                     .padding(horizontal = 22.dp, vertical = 22.dp),
             ) {
                 ProgressSection(song, isPlaying, positionFlow, onSeek)
@@ -203,7 +204,7 @@ fun PlayerScreen(
                             .background(Color.White),
                         contentAlignment = Alignment.Center,
                     ) {
-                        PlayPauseIcon(isPlaying, Ui.Ink, 38.dp)
+                        PlayPauseIcon(isPlaying, Ui.OnAccent, 38.dp)
                     }
                     DeckSkip(Icons.Rounded.SkipNext, onNext)
                     DeckToggle(
@@ -225,18 +226,22 @@ private fun ProgressSection(
     onSeek: (Float) -> Unit,
 ) {
     val pos by positionFlow.collectAsState()
+    var scrub by remember { mutableStateOf<Float?>(null) }
     val frac = if (song.durationMs > 0) (pos.toFloat() / song.durationMs).coerceIn(0f, 1f) else 0f
+    val shownMs = scrub?.let { (it * song.durationMs).toLong() } ?: pos
     Column {
+        ScrubBubble(scrub, pos, song.durationMs)
         Waveform(
             seed = song.id,
             progress = frac,
             playing = playing,
             onSeek = onSeek,
+            onScrub = { scrub = it },
             modifier = Modifier.fillMaxWidth().height(68.dp),
         )
         Spacer(Modifier.height(8.dp))
         Row(Modifier.fillMaxWidth()) {
-            Text(fmt(pos), fontSize = 12.sp, color = Color.White.copy(alpha = 0.6f), fontWeight = FontWeight.Medium)
+            Text(fmt(shownMs), fontSize = 12.sp, color = Color.White.copy(alpha = 0.6f), fontWeight = FontWeight.Medium)
             Spacer(Modifier.weight(1f))
             Text(fmt(song.durationMs), fontSize = 12.sp, color = Color.White.copy(alpha = 0.6f), fontWeight = FontWeight.Medium)
         }

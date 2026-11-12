@@ -28,3 +28,5 @@ data class FolderGroup(
 }
 
 enum class SortField { Alphabet, DateAdded }
+
+enum class ThemeMode { System, Light, Dark }
