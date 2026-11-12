@@ -16,12 +16,19 @@ android {
         versionName = (project.findProperty("appVersion") as String?) ?: "1.0.0"
     }
 
+    // Release key comes from CI secrets (KEYSTORE_PASSWORD / KEY_ALIAS, file restored to app/release.jks).
+    // Without them (local builds) it falls back to the debug key so the project still builds.
+    val ksPass = System.getenv("KEYSTORE_PASSWORD")
+    val ksAlias = System.getenv("KEY_ALIAS")
+    val hasReleaseKey = !ksPass.isNullOrEmpty() && !ksAlias.isNullOrEmpty() && file("release.jks").exists()
     signingConfigs {
-        create("release") {
-            storeFile = file("release.jks")
-            storePassword = "musicplayer"
-            keyAlias = "musicplayer"
-            keyPassword = "musicplayer"
+        if (hasReleaseKey) {
+            create("release") {
+                storeFile = file("release.jks")
+                storePassword = ksPass
+                keyAlias = ksAlias
+                keyPassword = ksPass
+            }
         }
     }
 
@@ -29,7 +36,7 @@ android {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
-            signingConfig = signingConfigs.getByName("release")
+            signingConfig = signingConfigs.getByName(if (hasReleaseKey) "release" else "debug")
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
