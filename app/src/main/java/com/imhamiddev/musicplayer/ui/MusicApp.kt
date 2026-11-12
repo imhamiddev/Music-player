@@ -239,6 +239,7 @@ fun MusicApp(vm: MainViewModel) {
                     song = it,
                     isPlaying = isPlaying,
                     positionFlow = vm.positionMs,
+                    durationFlow = vm.durationMs,
                     onToggle = vm::togglePlay,
                     onNext = vm::next,
                     onOpen = { playerOpen = true },
@@ -260,6 +261,7 @@ fun MusicApp(vm: MainViewModel) {
                     shuffle = shuffle,
                     repeatMode = repeat,
                     positionFlow = vm.positionMs,
+                    durationFlow = vm.durationMs,
                     onClose = { playerOpen = false },
                     onToggle = vm::togglePlay,
                     onNext = vm::next,
@@ -323,6 +325,7 @@ private fun MiniPlayer(
     song: Song,
     isPlaying: Boolean,
     positionFlow: StateFlow<Long>,
+    durationFlow: StateFlow<Long>,
     onToggle: () -> Unit,
     onNext: () -> Unit,
     onOpen: () -> Unit,
@@ -359,14 +362,16 @@ private fun MiniPlayer(
                 Icon(Icons.Rounded.SkipNext, "Next", tint = Color.White, modifier = Modifier.size(24.dp))
             }
         }
-        MiniProgress(song, positionFlow, Modifier.padding(top = 8.dp, start = 4.dp, end = 4.dp))
+        MiniProgress(song, positionFlow, durationFlow, Modifier.padding(top = 8.dp, start = 4.dp, end = 4.dp))
     }
 }
 
 @Composable
-private fun MiniProgress(song: Song, positionFlow: StateFlow<Long>, modifier: Modifier) {
+private fun MiniProgress(song: Song, positionFlow: StateFlow<Long>, durationFlow: StateFlow<Long>, modifier: Modifier) {
     val pos by positionFlow.collectAsState()
-    val frac = if (song.durationMs > 0) (pos.toFloat() / song.durationMs).coerceIn(0f, 1f) else 0f
+    val liveDur by durationFlow.collectAsState()
+    val dur = if (liveDur > 0L) liveDur else song.durationMs
+    val frac = if (dur > 0) (pos.toFloat() / dur).coerceIn(0f, 1f) else 0f
     Canvas(modifier.fillMaxWidth().height(3.dp)) {
         val y = size.height / 2f
         drawLine(Color.White.copy(alpha = 0.12f), Offset(0f, y), Offset(size.width, y), size.height, StrokeCap.Round)

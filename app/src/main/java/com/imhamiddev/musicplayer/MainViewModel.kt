@@ -7,6 +7,7 @@ import android.net.Uri
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
@@ -143,6 +144,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (s !is UpdateState.Downloading) _update.value = UpdateState.None
     }
 
+    /** Real duration reported by the player (MediaStore's value is often wrong for VBR files). 0 = unknown. */
+    private val _durationMs = MutableStateFlow(0L)
+    val durationMs: StateFlow<Long> = _durationMs.asStateFlow()
+
+    private fun syncDuration() {
+        val d = controller?.duration ?: C.TIME_UNSET
+        _durationMs.value = if (d == C.TIME_UNSET || d <= 0L) 0L else d
+    }
+
     private var controller: MediaController? = null
     private val controllerFuture: ListenableFuture<MediaController>
 
@@ -155,7 +165,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val id = mediaItem?.mediaId?.toLongOrNull()
             _currentId.value = id
             _positionMs.value = 0L
+            _durationMs.value = 0L
+            syncDuration()
             if (id != null) addRecent(id)
+        }
+
+        override fun onPlaybackStateChanged(playbackState: Int) {
+            syncDuration()
+        }
+
+        override fun onTimelineChanged(timeline: androidx.media3.common.Timeline, reason: Int) {
+            syncDuration()
         }
 
         override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) {
@@ -180,6 +200,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 _shuffle.value = c.shuffleModeEnabled
                 _repeat.value = c.repeatMode
                 _positionMs.value = c.currentPosition.coerceAtLeast(0L)
+                syncDuration()
             } catch (_: Exception) {
             }
         }, ContextCompat.getMainExecutor(app))
@@ -190,6 +211,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             while (isActive) {
                 delay(250)
                 controller?.let { _positionMs.value = it.currentPosition.coerceAtLeast(0L) }
+                if (_durationMs.value == 0L) syncDuration()
             }
         }
     }
@@ -327,7 +349,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun seekToFraction(fraction: Float, durationMs: Long) {
-        val target = (fraction.coerceIn(0f, 1f) * durationMs).toLong()
+        val real = _durationMs.value.takeIf { it > 0L } ?: durationMs
+        val target = (fraction.coerceIn(0f, 1f) * real).toLong().coerceIn(0L, real)
         controller?.seekTo(target)
         _positionMs.value = target
     }

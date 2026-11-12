@@ -15,6 +15,9 @@ import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.SeekParameters
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.extractor.DefaultExtractorsFactory
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import com.google.common.util.concurrent.Futures
@@ -76,7 +79,10 @@ class PlaybackService : MediaSessionService() {
 
     override fun onCreate() {
         super.onCreate()
-        val player = ExoPlayer.Builder(this)
+        // Exact seeking: without this ExoPlayer snaps to the nearest sync point, which is off by seconds on many MP3s.
+        val extractors = DefaultExtractorsFactory().setConstantBitrateSeekingEnabled(true)
+        val player = ExoPlayer.Builder(this, DefaultMediaSourceFactory(this, extractors))
+            .setSeekParameters(SeekParameters.EXACT)
             .setAudioAttributes(
                 AudioAttributes.Builder()
                     .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
