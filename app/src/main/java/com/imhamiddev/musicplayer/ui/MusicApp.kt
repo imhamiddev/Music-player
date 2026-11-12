@@ -1,6 +1,8 @@
 package com.imhamiddev.musicplayer.ui
 
 import android.Manifest
+import android.app.Activity
+import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -9,6 +11,7 @@ import android.os.Build
 import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -40,8 +43,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.SkipNext
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -67,7 +72,9 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import com.imhamiddev.musicplayer.MainViewModel
+import com.imhamiddev.musicplayer.data.Prefs
 import com.imhamiddev.musicplayer.data.Song
+import com.imhamiddev.musicplayer.data.ThemeMode
 import kotlinx.coroutines.flow.StateFlow
 
 private fun audioPermission(): String =
@@ -101,6 +108,32 @@ fun MusicApp(vm: MainViewModel) {
     var granted by remember { mutableStateOf(hasAudioPermission(ctx)) }
     var denied by remember { mutableStateOf(false) }
     var playerOpen by rememberSaveable { mutableStateOf(false) }
+    val themeMode by vm.themeMode.collectAsState()
+
+    var renameTarget by remember { mutableStateOf<Song?>(null) }
+    var detailsTarget by remember { mutableStateOf<Song?>(null) }
+    var deleteTarget by remember { mutableStateOf<Song?>(null) }
+    var pendingDelete by remember { mutableStateOf<Song?>(null) }
+    var askFullScreen by remember { mutableStateOf(false) }
+
+    val deleteLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { res ->
+        val song = pendingDelete
+        pendingDelete = null
+        if (song != null && res.resultCode == Activity.RESULT_OK) {
+            if (Build.VERSION.SDK_INT < 30) {
+                runCatching { ctx.contentResolver.delete(song.uri, null, null) }
+            }
+            vm.onSongsDeleted(setOf(song.id))
+        }
+    }
+    fun startDelete(song: Song) {
+        pendingDelete = song
+        deleteSong(
+            ctx, song,
+            launch = { sender -> deleteLauncher.launch(IntentSenderRequest.Builder(sender).build()) },
+            onDone = { pendingDelete = null; vm.onSongsDeleted(setOf(song.id)) },
+        )
+    }
 
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
         granted = hasAudioPermission(ctx)
@@ -129,10 +162,29 @@ fun MusicApp(vm: MainViewModel) {
         return
     }
 
+    LaunchedEffect(Unit) {
+        if (Build.VERSION.SDK_INT >= 34) {
+            val nm = ctx.getSystemService(NotificationManager::class.java)
+            val prefs = Prefs(ctx)
+            if (nm != null && !nm.canUseFullScreenIntent() && !prefs.fsiAsked()) askFullScreen = true
+        }
+    }
+
+    val actions = remember(vm) {
+        SongActions(
+            onToggleFav = { vm.toggleFavorite(it.id) },
+            onPlayNext = { vm.playNext(it) },
+            onRename = { renameTarget = it },
+            onShare = { shareSong(ctx, it) },
+            onDetails = { detailsTarget = it },
+            onDelete = { if (Build.VERSION.SDK_INT >= 30) startDelete(it) else deleteTarget = it },
+        )
+    }
+
     val current: Song? = remember(songs, currentId) { songs.firstOrNull { it.id == currentId } }
     val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val bottomInset by animateDpAsState(
-        if (current != null) navBottom + 112.dp else navBottom + 24.dp,
+        if (current != null) navBottom + 94.dp else navBottom + 24.dp,
         spring(dampingRatio = 0.85f, stiffness = 300f),
         label = "inset",
     )
@@ -151,7 +203,9 @@ fun MusicApp(vm: MainViewModel) {
             bottomInset = bottomInset,
             onQuery = vm::setQuery,
             onSort = vm::setSort,
-            onToggleFav = vm::toggleFavorite,
+            dark = Ui.dark,
+            onToggleTheme = { vm.setThemeMode(if (Ui.dark) ThemeMode.Light else ThemeMode.Dark) },
+            actions = actions,
             onPlay = vm::play,
             onOpenPlayer = { playerOpen = true },
         )
@@ -170,7 +224,7 @@ fun MusicApp(vm: MainViewModel) {
                     onToggle = vm::togglePlay,
                     onNext = vm::next,
                     onOpen = { playerOpen = true },
-                    modifier = Modifier.navigationBarsPadding().padding(horizontal = 14.dp, vertical = 10.dp),
+                    modifier = Modifier.navigationBarsPadding().padding(horizontal = 20.dp, vertical = 8.dp),
                 )
             }
         }
@@ -202,6 +256,48 @@ fun MusicApp(vm: MainViewModel) {
         // Registered after the library's own handler so it takes priority while the player is open.
         BackHandler(enabled = playerOpen) { playerOpen = false }
     }
+
+    renameTarget?.let { t ->
+        RenameDialog(t, onDismiss = { renameTarget = null }) { name ->
+            vm.renameSong(t, name)
+            renameTarget = null
+        }
+    }
+    detailsTarget?.let { t -> DetailsDialog(t) { detailsTarget = null } }
+    deleteTarget?.let { t ->
+        DeleteDialog(t, onDismiss = { deleteTarget = null }) {
+            deleteTarget = null
+            startDelete(t)
+        }
+    }
+    if (askFullScreen) {
+        AlertDialog(
+            onDismissRequest = { askFullScreen = false; Prefs(ctx).setFsiAsked() },
+            containerColor = Ui.Card,
+            shape = RoundedCornerShape(28.dp),
+            title = { Text("Lock screen player", color = Ui.Ink, fontWeight = FontWeight.Bold) },
+            text = {
+                Text(
+                    "Allow full-screen notifications so the player can take over your lock screen while music is playing.",
+                    color = Ui.Muted, fontSize = 14.sp,
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    askFullScreen = false
+                    Prefs(ctx).setFsiAsked()
+                    runCatching {
+                        ctx.startActivity(
+                            Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT, Uri.fromParts("package", ctx.packageName, null)),
+                        )
+                    }
+                }) { Text("Allow", color = Ui.Ink, fontWeight = FontWeight.SemiBold) }
+            },
+            dismissButton = {
+                TextButton(onClick = { askFullScreen = false; Prefs(ctx).setFsiAsked() }) { Text("Not now", color = Ui.Muted) }
+            },
+        )
+    }
 }
 
 @Composable
@@ -214,38 +310,38 @@ private fun MiniPlayer(
     onOpen: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val shape = RoundedCornerShape(30.dp)
-    Box(
+    val shape = RoundedCornerShape(26.dp)
+    Column(
         modifier
             .fillMaxWidth()
-            .height(76.dp)
             .bouncyClick(0.98f, onClick = onOpen)
-            .shadow(22.dp, shape, ambientColor = Color.Black.copy(0.2f), spotColor = Color.Black.copy(0.3f))
+            .shadow(20.dp, shape, ambientColor = Color.Black.copy(0.2f), spotColor = Color.Black.copy(0.3f))
             .clip(shape)
-            .background(Ui.Ink),
+            .background(Ui.Deck)
+            .padding(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 9.dp),
     ) {
-        Row(Modifier.fillMaxSize().padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
-            AlbumArt(song, Modifier.size(54.dp), RoundedCornerShape(18.dp), 160)
-            Spacer(Modifier.width(12.dp))
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            AlbumArt(song, Modifier.size(42.dp), RoundedCornerShape(14.dp), 160)
+            Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
-                Text(song.title, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Spacer(Modifier.height(2.dp))
-                Text(song.artist, color = Color.White.copy(alpha = 0.6f), fontSize = 12.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(song.title, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Spacer(Modifier.height(1.dp))
+                Text(song.artist, color = Color.White.copy(alpha = 0.6f), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             Box(
-                Modifier.size(46.dp).bouncyClick(0.88f, onClick = onToggle).clip(CircleShape).background(Color.White),
+                Modifier.size(40.dp).bouncyClick(0.88f, onClick = onToggle).clip(CircleShape).background(Color.White),
                 contentAlignment = Alignment.Center,
             ) {
-                PlayPauseIcon(isPlaying, Ui.Ink, 26.dp)
+                PlayPauseIcon(isPlaying, Ui.OnAccent, 24.dp)
             }
             Box(
-                Modifier.size(44.dp).bouncyClick(0.85f, onClick = onNext).clip(CircleShape),
+                Modifier.size(40.dp).bouncyClick(0.85f, onClick = onNext).clip(CircleShape),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(Icons.Rounded.SkipNext, "Next", tint = Color.White, modifier = Modifier.size(26.dp))
+                Icon(Icons.Rounded.SkipNext, "Next", tint = Color.White, modifier = Modifier.size(24.dp))
             }
         }
-        MiniProgress(song, positionFlow, Modifier.align(Alignment.BottomCenter).padding(horizontal = 26.dp, vertical = 5.dp))
+        MiniProgress(song, positionFlow, Modifier.padding(top = 8.dp, start = 4.dp, end = 4.dp))
     }
 }
 
@@ -280,7 +376,7 @@ private fun PermissionScreen(denied: Boolean, onClick: () -> Unit) {
                     Modifier.size(116.dp).clip(RoundedCornerShape(38.dp)).background(Ui.GreenBrush),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(Icons.Rounded.MusicNote, null, tint = Ui.Ink, modifier = Modifier.size(56.dp))
+                    Icon(Icons.Rounded.MusicNote, null, tint = Ui.OnAccent, modifier = Modifier.size(56.dp))
                 }
                 Spacer(Modifier.height(32.dp))
                 Text(
@@ -303,7 +399,7 @@ private fun PermissionScreen(denied: Boolean, onClick: () -> Unit) {
                         .background(Ui.Ink),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text(if (denied) "Open settings" else "Allow access", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                    Text(if (denied) "Open settings" else "Allow access", color = Ui.Bg, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
         }
