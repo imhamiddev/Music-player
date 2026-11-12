@@ -17,11 +17,15 @@ import com.imhamiddev.musicplayer.data.MusicRepository
 import com.imhamiddev.musicplayer.data.Prefs
 import com.imhamiddev.musicplayer.data.Song
 import com.imhamiddev.musicplayer.data.SortField
+import com.imhamiddev.musicplayer.data.ThemeMode
 import com.imhamiddev.musicplayer.playback.PlaybackService
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
@@ -29,8 +33,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private val prefs = Prefs(app)
 
-    private val _songs = MutableStateFlow<List<Song>>(emptyList())
-    val songs: StateFlow<List<Song>> = _songs.asStateFlow()
+    private val _rawSongs = MutableStateFlow<List<Song>>(emptyList())
+    private val _titles = MutableStateFlow(prefs.titles())
+
+    /** Library songs with the user's in-app renames applied. */
+    val songs: StateFlow<List<Song>> = combine(_rawSongs, _titles) { list, titles ->
+        if (titles.isEmpty()) list else list.map { s -> titles[s.id]?.let { s.copy(title = it) } ?: s }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    private val _themeMode = MutableStateFlow(prefs.themeMode())
+    val themeMode: StateFlow<ThemeMode> = _themeMode.asStateFlow()
 
     private val _loaded = MutableStateFlow(false)
     val loaded: StateFlow<Boolean> = _loaded.asStateFlow()
@@ -118,7 +130,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun loadSongs() {
         viewModelScope.launch {
-            _songs.value = MusicRepository.load(getApplication())
+            _rawSongs.value = MusicRepository.load(getApplication())
             _loaded.value = true
         }
     }
@@ -135,6 +147,40 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             _sortAsc.value = field == SortField.Alphabet
         }
         prefs.saveSort(_sortField.value, _sortAsc.value)
+    }
+
+    fun setThemeMode(mode: ThemeMode) {
+        _themeMode.value = mode
+        prefs.saveThemeMode(mode)
+    }
+
+    fun renameSong(song: Song, newTitle: String) {
+        val t = newTitle.trim()
+        val next = _titles.value.toMutableMap()
+        if (t.isEmpty()) next.remove(song.id) else next[song.id] = t
+        _titles.value = next
+        prefs.saveTitles(next)
+    }
+
+    /** Called after the files were really deleted: drops them from the queue, favorites and history. */
+    fun onSongsDeleted(ids: Set<Long>) {
+        controller?.let { c ->
+            for (i in c.mediaItemCount - 1 downTo 0) {
+                val id = c.getMediaItemAt(i).mediaId.toLongOrNull()
+                if (id != null && id in ids) c.removeMediaItem(i)
+            }
+        }
+        val favs = _favorites.value - ids
+        _favorites.value = favs
+        prefs.saveFavorites(favs)
+        val rec = _recents.value.filter { it !in ids }
+        _recents.value = rec
+        prefs.saveRecents(rec)
+        val titles = _titles.value - ids
+        _titles.value = titles
+        prefs.saveTitles(titles)
+        _rawSongs.value = _rawSongs.value.filter { it.id !in ids }
+        loadSongs()
     }
 
     fun toggleFavorite(id: Long) {
@@ -183,6 +229,20 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
         c.prepare()
         c.play()
+    }
+
+    fun playNext(song: Song) {
+        val c = controller ?: return
+        if (c.mediaItemCount == 0) {
+            play(song, listOf(song))
+            return
+        }
+        val key = song.id.toString()
+        if (c.currentMediaItem?.mediaId == key) return
+        for (i in c.mediaItemCount - 1 downTo 0) {
+            if (c.getMediaItemAt(i).mediaId == key) c.removeMediaItem(i)
+        }
+        c.addMediaItem(c.currentMediaItemIndex + 1, toMediaItem(song))
     }
 
     fun togglePlay() {

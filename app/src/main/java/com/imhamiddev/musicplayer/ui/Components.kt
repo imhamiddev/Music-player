@@ -31,6 +31,8 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -226,7 +228,7 @@ fun SegmentedTabs(
                 .fillMaxHeight()
                 .shadow(6.dp, shape, ambientColor = Color.Black.copy(0.08f), spotColor = Color.Black.copy(0.14f))
                 .clip(shape)
-                .background(Color.White),
+                .background(Ui.Card),
         )
         Row(Modifier.fillMaxSize()) {
             labels.forEachIndexed { i, label ->
@@ -254,7 +256,7 @@ fun SearchPill(query: String, onQuery: (String) -> Unit, resultCount: Int, modif
             .height(56.dp)
             .shadow(10.dp, shape, ambientColor = Color.Black.copy(0.05f), spotColor = Color.Black.copy(0.09f))
             .clip(shape)
-            .background(Color.White)
+            .background(Ui.Card)
             .padding(start = 18.dp, end = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -296,7 +298,7 @@ fun SearchPill(query: String, onQuery: (String) -> Unit, resultCount: Int, modif
                     ) { n ->
                         Text(
                             if (n == 1) "1 result" else "$n results",
-                            color = Ui.Ink, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+                            color = Ui.OnAccent, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
                         )
                     }
                 }
@@ -405,6 +407,7 @@ fun Waveform(
     modifier: Modifier = Modifier,
     bars: Int = 46,
     unplayed: Color = Color.White.copy(alpha = 0.2f),
+    onScrub: (Float?) -> Unit = {},
 ) {
     val heights = remember(seed, bars) {
         val r = Random(seed)
@@ -422,27 +425,32 @@ fun Waveform(
     val phase by inf.animateFloat(0f, (2 * PI).toFloat(), infiniteRepeatable(tween(1400, easing = LinearEasing)), label = "phase")
 
     Canvas(
-        modifier
-            .pointerInput(Unit) {
-                detectTapGestures { off -> onSeek((off.x / size.width).coerceIn(0f, 1f)) }
+        modifier.pointerInput(Unit) {
+            // Touch-down shows the target time immediately; dragging updates it live; lifting seeks.
+            awaitEachGesture {
+                val down = awaitFirstDown(requireUnconsumed = false)
+                down.consume()
+                dragging = true
+                dragFrac = (down.position.x / size.width).coerceIn(0f, 1f)
+                onScrub(dragFrac)
+                var cancelled = false
+                while (true) {
+                    val event = awaitPointerEvent()
+                    val change = event.changes.firstOrNull { it.id == down.id }
+                    if (change == null) {
+                        cancelled = true
+                        break
+                    }
+                    dragFrac = (change.position.x / size.width).coerceIn(0f, 1f)
+                    onScrub(dragFrac)
+                    change.consume()
+                    if (!change.pressed) break
+                }
+                dragging = false
+                onScrub(null)
+                if (!cancelled) onSeek(dragFrac)
             }
-            .pointerInput(Unit) {
-                detectHorizontalDragGestures(
-                    onDragStart = { off ->
-                        dragging = true
-                        dragFrac = (off.x / size.width).coerceIn(0f, 1f)
-                    },
-                    onDragEnd = {
-                        dragging = false
-                        onSeek(dragFrac)
-                    },
-                    onDragCancel = { dragging = false },
-                    onHorizontalDrag = { change, _ ->
-                        change.consume()
-                        dragFrac = (change.position.x / size.width).coerceIn(0f, 1f)
-                    },
-                )
-            },
+        },
     ) {
         val n = heights.size
         val slot = size.width / n
@@ -462,6 +470,30 @@ fun Waveform(
             } else {
                 drawLine(unplayed, Offset(x, midY - half), Offset(x, midY + half), stroke, StrokeCap.Round)
             }
+        }
+    }
+}
+
+/** Pill shown above the waveform while the finger is down: the time under the finger and the jump. */
+@Composable
+fun ScrubBubble(scrub: Float?, posMs: Long, durationMs: Long, modifier: Modifier = Modifier) {
+    val last = remember { FloatArray(1) }
+    if (scrub != null) last[0] = scrub
+    val a by animateFloatAsState(if (scrub != null) 1f else 0f, tween(140), label = "bubble")
+    val target = (last[0] * durationMs).toLong()
+    val delta = target - posMs
+    val sign = if (delta >= 0) "+" else "-"
+    Box(
+        modifier.fillMaxWidth().height(38.dp).graphicsLayer { alpha = a },
+        contentAlignment = Alignment.Center,
+    ) {
+        Row(
+            Modifier.clip(RoundedCornerShape(50)).background(Ui.GreenBrush).padding(horizontal = 16.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(fmt(target), color = Ui.OnAccent, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.width(8.dp))
+            Text("$sign${fmt(abs(delta))}", color = Ui.OnAccent.copy(alpha = 0.65f), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
         }
     }
 }

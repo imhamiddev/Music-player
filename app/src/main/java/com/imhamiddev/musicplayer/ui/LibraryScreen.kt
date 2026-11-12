@@ -45,10 +45,12 @@ import androidx.compose.material.icons.rounded.AccessTime
 import androidx.compose.material.icons.rounded.ArrowUpward
 import androidx.compose.material.icons.rounded.ChevronLeft
 import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.LibraryMusic
+import androidx.compose.material.icons.rounded.LightMode
 import androidx.compose.material.icons.rounded.Sort
 import androidx.compose.material.icons.rounded.SortByAlpha
 import androidx.compose.material3.DropdownMenu
@@ -101,7 +103,9 @@ fun LibraryScreen(
     bottomInset: Dp,
     onQuery: (String) -> Unit,
     onSort: (SortField) -> Unit,
-    onToggleFav: (Long) -> Unit,
+    dark: Boolean,
+    onToggleTheme: () -> Unit,
+    actions: SongActions,
     onPlay: (Song, List<Song>) -> Unit,
     onOpenPlayer: () -> Unit,
 ) {
@@ -180,6 +184,11 @@ fun LibraryScreen(
                     label = "subtitle",
                 ) { s -> Text(s, fontSize = 14.sp, color = Ui.Muted) }
             }
+            IconCircle(
+                if (dark) Icons.Rounded.LightMode else Icons.Rounded.DarkMode,
+                onToggleTheme, size = 48.dp, description = "Theme",
+            )
+            Spacer(Modifier.width(10.dp))
             AnimatedVisibility(
                 visible = tab != 3,
                 enter = scaleIn(animationSpec = spring(0.6f, 400f)) + fadeIn(),
@@ -223,7 +232,7 @@ fun LibraryScreen(
                         0 -> SongList(
                             sorted, favorites, currentId, isPlaying, bottomInset,
                             if (q.isNotEmpty()) noResults(q) else EmptyInfo(Icons.Rounded.LibraryMusic, "No music found", "Add some audio files to your device and they will show up here."),
-                            onToggleFav, onPlay, onOpenPlayer,
+                            actions, onPlay, onOpenPlayer,
                         )
                         1 -> AnimatedContent(
                             targetState = openFolder,
@@ -260,7 +269,7 @@ fun LibraryScreen(
                                         SongList(
                                             openGroup?.songs ?: emptyList(), favorites, currentId, isPlaying, bottomInset,
                                             if (q.isNotEmpty()) noResults(q) else EmptyInfo(Icons.Rounded.Folder, "Empty folder", "There is no music in this folder."),
-                                            onToggleFav, onPlay, onOpenPlayer,
+                                            actions, onPlay, onOpenPlayer,
                                         )
                                     }
                                 }
@@ -269,12 +278,12 @@ fun LibraryScreen(
                         2 -> SongList(
                             favs, favorites, currentId, isPlaying, bottomInset,
                             if (q.isNotEmpty()) noResults(q) else EmptyInfo(Icons.Rounded.Favorite, "No favorites yet", "Tap the heart on any song to keep it here."),
-                            onToggleFav, onPlay, onOpenPlayer,
+                            actions, onPlay, onOpenPlayer,
                         )
                         else -> SongList(
                             recentList, favorites, currentId, isPlaying, bottomInset,
                             if (q.isNotEmpty()) noResults(q) else EmptyInfo(Icons.Rounded.History, "Nothing played yet", "Songs you play will show up here."),
-                            onToggleFav, onPlay, onOpenPlayer,
+                            actions, onPlay, onOpenPlayer,
                         )
                     }
                 }
@@ -302,7 +311,7 @@ private fun SortMenu(
         onDismissRequest = onDismiss,
         offset = DpOffset(0.dp, 8.dp),
         shape = RoundedCornerShape(26.dp),
-        containerColor = Color.White,
+        containerColor = Ui.Card,
         tonalElevation = 0.dp,
         shadowElevation = 18.dp,
     ) {
@@ -365,7 +374,7 @@ private fun SortOption(
         AnimatedVisibility(visible = selected, enter = scaleIn(animationSpec = spring(0.5f, 500f)) + fadeIn(), exit = scaleOut() + fadeOut()) {
             Box(Modifier.size(28.dp).clip(CircleShape).background(Ui.GreenBrush), contentAlignment = Alignment.Center) {
                 Icon(
-                    Icons.Rounded.ArrowUpward, null, tint = Ui.Ink,
+                    Icons.Rounded.ArrowUpward, null, tint = Ui.OnAccent,
                     modifier = Modifier.size(16.dp).graphicsLayer { rotationZ = rot },
                 )
             }
@@ -383,7 +392,7 @@ private fun SongList(
     isPlaying: Boolean,
     bottomInset: Dp,
     empty: EmptyInfo,
-    onToggleFav: (Long) -> Unit,
+    actions: SongActions,
     onPlay: (Song, List<Song>) -> Unit,
     onOpenPlayer: () -> Unit,
 ) {
@@ -393,7 +402,7 @@ private fun SongList(
     }
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 8.dp, bottom = bottomInset),
+        contentPadding = PaddingValues(start = 30.dp, end = 30.dp, top = 8.dp, bottom = bottomInset),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         itemsIndexed(items, key = { _, s -> s.id }) { index, song ->
@@ -405,7 +414,7 @@ private fun SongList(
                 isPlaying = isPlaying,
                 isFav = song.id in favorites,
                 onClick = { if (isCurrent) onOpenPlayer() else onPlay(song, items) },
-                onFav = { onToggleFav(song.id) },
+                actions = actions,
                 modifier = Modifier.animateItem(),
             )
         }
@@ -420,7 +429,7 @@ private fun SongRow(
     isPlaying: Boolean,
     isFav: Boolean,
     onClick: () -> Unit,
-    onFav: () -> Unit,
+    actions: SongActions,
     modifier: Modifier = Modifier,
 ) {
     var shown by remember { mutableStateOf(index >= 12) }
@@ -431,7 +440,7 @@ private fun SongRow(
         }
     }
     val a by animateFloatAsState(if (shown) 1f else 0f, tween(420, easing = FastOutSlowInEasing), label = "rowa")
-    val bg by animateColorAsState(if (isCurrent) Ui.GreenTint else Color.White, tween(300), label = "rowbg")
+    val bg by animateColorAsState(if (isCurrent) Ui.GreenTint else Ui.Card, tween(300), label = "rowbg")
     Row(
         modifier
             .graphicsLayer { alpha = a; translationY = (1f - a) * 26.dp.toPx() }
@@ -439,10 +448,10 @@ private fun SongRow(
             .bouncyClick(0.97f, onClick = onClick)
             .clip(RoundedCornerShape(22.dp))
             .background(bg)
-            .padding(10.dp),
+            .padding(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        AlbumArt(song, Modifier.size(54.dp), RoundedCornerShape(16.dp), 160)
+        AlbumArt(song, Modifier.size(48.dp), RoundedCornerShape(14.dp), 160)
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Text(
@@ -458,7 +467,7 @@ private fun SongRow(
         AnimatedVisibility(visible = isCurrent, enter = scaleIn() + fadeIn(), exit = scaleOut() + fadeOut()) {
             EqualizerBars(isPlaying, Modifier.padding(horizontal = 8.dp))
         }
-        HeartButton(isFav, onFav, size = 40.dp)
+        SongMenuButton(song, isFav, actions)
     }
 }
 
@@ -475,7 +484,7 @@ private fun FolderList(
     }
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 8.dp, bottom = bottomInset),
+        contentPadding = PaddingValues(start = 30.dp, end = 30.dp, top = 8.dp, bottom = bottomInset),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         items(folders, key = { it.path }) { g ->
@@ -485,12 +494,12 @@ private fun FolderList(
                     .fillMaxWidth()
                     .bouncyClick(0.97f) { onOpen(g) }
                     .clip(RoundedCornerShape(22.dp))
-                    .background(Color.White)
-                    .padding(10.dp),
+                    .background(Ui.Card)
+                    .padding(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Box(
-                    Modifier.size(54.dp).clip(RoundedCornerShape(16.dp)).background(Ui.Tile),
+                    Modifier.size(48.dp).clip(RoundedCornerShape(14.dp)).background(Ui.Tile),
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(Icons.Rounded.Folder, null, tint = Ui.Ink, modifier = Modifier.size(26.dp))
@@ -535,9 +544,9 @@ private fun EmptyState(info: EmptyInfo, modifier: Modifier = Modifier) {
 private fun Skeleton() {
     val t = rememberInfiniteTransition(label = "sk")
     val a by t.animateFloat(0.45f, 1f, infiniteRepeatable(tween(800), RepeatMode.Reverse), label = "ska")
-    Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(Modifier.padding(horizontal = 30.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         repeat(8) {
-            Box(Modifier.fillMaxWidth().height(74.dp).alpha(a).clip(RoundedCornerShape(22.dp)).background(Ui.Tile))
+            Box(Modifier.fillMaxWidth().height(64.dp).alpha(a).clip(RoundedCornerShape(22.dp)).background(Ui.Tile))
         }
     }
 }
