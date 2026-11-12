@@ -158,8 +158,8 @@ fun PlayPauseIcon(playing: Boolean, tint: Color, size: Dp) {
     AnimatedContent(
         targetState = playing,
         transitionSpec = {
-            (fadeIn(tween(600, easing = Motion.Silk)) + scaleIn(animationSpec = Motion.soft(), initialScale = 0.4f)) togetherWith
-                (fadeOut(tween(600, easing = Motion.Silk)) + scaleOut(animationSpec = tween(600, easing = Motion.Silk), targetScale = 0.4f))
+            (fadeIn(tween(260, easing = Motion.Silk)) + scaleIn(animationSpec = Motion.soft(), initialScale = 0.4f)) togetherWith
+                (fadeOut(tween(260, easing = Motion.Silk)) + scaleOut(animationSpec = tween(260, easing = Motion.Silk), targetScale = 0.4f))
         },
         label = "playpause",
     ) { p ->
@@ -189,7 +189,7 @@ fun HeartButton(
         }
         prev = fav
     }
-    val tint by animateColorAsState(if (fav) Ui.Pink else idleTint, tween(600, easing = Motion.Silk), label = "heart")
+    val tint by animateColorAsState(if (fav) Ui.Pink else idleTint, tween(260, easing = Motion.Silk), label = "heart")
     Box(modifier.size(size).bouncyClick(0.85f, onClick = onClick), contentAlignment = Alignment.Center) {
         Icon(
             if (fav) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
@@ -232,7 +232,7 @@ fun SegmentedTabs(
         )
         Row(Modifier.fillMaxSize()) {
             labels.forEachIndexed { i, label ->
-                val color by animateColorAsState(if (i == selected) Ui.Ink else Ui.Muted, tween(600, easing = Motion.Silk), label = "tabc")
+                val color by animateColorAsState(if (i == selected) Ui.Ink else Ui.Muted, tween(260, easing = Motion.Silk), label = "tabc")
                 Box(
                     Modifier.weight(1f).fillMaxHeight().bouncyClick(0.94f) { onSelect(i) },
                     contentAlignment = Alignment.Center,
@@ -317,7 +317,7 @@ fun EqualizerBars(playing: Boolean, modifier: Modifier = Modifier) {
     val a by t.animateFloat(0.25f, 1f, infiniteRepeatable(tween(520), RepeatMode.Reverse), label = "a")
     val b by t.animateFloat(0.25f, 1f, infiniteRepeatable(tween(380), RepeatMode.Reverse), label = "b")
     val c by t.animateFloat(0.25f, 1f, infiniteRepeatable(tween(450), RepeatMode.Reverse), label = "c")
-    val live by animateFloatAsState(if (playing) 1f else 0f, tween(780, easing = Motion.Silk), label = "live")
+    val live by animateFloatAsState(if (playing) 1f else 0f, tween(390, easing = Motion.Silk), label = "live")
     Row(
         modifier.height(18.dp),
         horizontalArrangement = Arrangement.spacedBy(3.dp),
@@ -384,7 +384,7 @@ fun AlbumArt(
         modifier.clip(shape).background(Brush.linearGradient(colors)),
         contentAlignment = Alignment.Center,
     ) {
-        Crossfade(targetState = bmp, animationSpec = tween(728, easing = Motion.Silk), modifier = Modifier.fillMaxSize(), label = "art") { b ->
+        Crossfade(targetState = bmp, animationSpec = tween(364, easing = Motion.Silk), modifier = Modifier.fillMaxSize(), label = "art") { b ->
             if (b != null) {
                 Image(bitmap = b, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
             } else {
@@ -420,7 +420,7 @@ fun Waveform(
     var dragging by remember { mutableStateOf(false) }
     var dragFrac by remember { mutableFloatStateOf(0f) }
     val smooth by animateFloatAsState(progress, tween(260, easing = LinearEasing), label = "wfp")
-    val live by animateFloatAsState(if (playing) 1f else 0f, tween(780, easing = Motion.Silk), label = "wfl")
+    val live by animateFloatAsState(if (playing) 1f else 0f, tween(390, easing = Motion.Silk), label = "wfl")
     val inf = rememberInfiniteTransition(label = "wf")
     val phase by inf.animateFloat(0f, (2 * PI).toFloat(), infiniteRepeatable(tween(1400, easing = LinearEasing)), label = "phase")
 
@@ -479,7 +479,7 @@ fun Waveform(
 fun ScrubBubble(scrub: Float?, posMs: Long, durationMs: Long, modifier: Modifier = Modifier) {
     val last = remember { FloatArray(1) }
     if (scrub != null) last[0] = scrub
-    val a by animateFloatAsState(if (scrub != null) 1f else 0f, tween(600, easing = Motion.Silk), label = "bubble")
+    val a by animateFloatAsState(if (scrub != null) 1f else 0f, tween(260, easing = Motion.Silk), label = "bubble")
     val target = (last[0] * durationMs).toLong()
     val delta = target - posMs
     val sign = if (delta >= 0) "+" else "-"
