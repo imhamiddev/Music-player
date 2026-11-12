@@ -79,6 +79,7 @@ fun PlayerScreen(
     shuffle: Boolean,
     repeatMode: Int,
     positionFlow: StateFlow<Long>,
+    durationFlow: StateFlow<Long>,
     onClose: () -> Unit,
     onToggle: () -> Unit,
     onNext: () -> Unit,
@@ -187,7 +188,7 @@ fun PlayerScreen(
                     .background(Ui.Deck)
                     .padding(horizontal = 22.dp, vertical = 22.dp),
             ) {
-                ProgressSection(song, isPlaying, positionFlow, onSeek)
+                ProgressSection(song, isPlaying, positionFlow, durationFlow, onSeek)
                 Spacer(Modifier.height(14.dp))
                 Row(
                     Modifier.fillMaxWidth(),
@@ -223,14 +224,17 @@ private fun ProgressSection(
     song: Song,
     playing: Boolean,
     positionFlow: StateFlow<Long>,
+    durationFlow: StateFlow<Long>,
     onSeek: (Float) -> Unit,
 ) {
     val pos by positionFlow.collectAsState()
+    val liveDur by durationFlow.collectAsState()
+    val dur = if (liveDur > 0L) liveDur else song.durationMs
     var scrub by remember { mutableStateOf<Float?>(null) }
-    val frac = if (song.durationMs > 0) (pos.toFloat() / song.durationMs).coerceIn(0f, 1f) else 0f
-    val shownMs = scrub?.let { (it * song.durationMs).toLong() } ?: pos
+    val frac = if (dur > 0) (pos.toFloat() / dur).coerceIn(0f, 1f) else 0f
+    val shownMs = scrub?.let { (it * dur).toLong() } ?: pos
     Column {
-        ScrubBubble(scrub, pos, song.durationMs)
+        ScrubBubble(scrub, pos, dur)
         Waveform(
             seed = song.id,
             progress = frac,
@@ -243,7 +247,7 @@ private fun ProgressSection(
         Row(Modifier.fillMaxWidth()) {
             Text(fmt(shownMs), fontSize = 12.sp, color = Color.White.copy(alpha = 0.6f), fontWeight = FontWeight.Medium)
             Spacer(Modifier.weight(1f))
-            Text(fmt(song.durationMs), fontSize = 12.sp, color = Color.White.copy(alpha = 0.6f), fontWeight = FontWeight.Medium)
+            Text(fmt(dur), fontSize = 12.sp, color = Color.White.copy(alpha = 0.6f), fontWeight = FontWeight.Medium)
         }
     }
 }

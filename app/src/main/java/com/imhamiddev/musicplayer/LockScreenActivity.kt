@@ -288,16 +288,18 @@ private fun LockScreenContent(vm: MainViewModel, onUnlock: () -> Unit) {
 @Composable
 private fun LockProgress(song: Song, playing: Boolean, vm: MainViewModel) {
     val pos by vm.positionMs.collectAsState()
+    val liveDur by vm.durationMs.collectAsState()
+    val dur = if (liveDur > 0L) liveDur else song.durationMs
     var scrub by remember { mutableStateOf<Float?>(null) }
-    val frac = if (song.durationMs > 0) (pos.toFloat() / song.durationMs).coerceIn(0f, 1f) else 0f
-    val shownMs = scrub?.let { (it * song.durationMs).toLong() } ?: pos
+    val frac = if (dur > 0) (pos.toFloat() / dur).coerceIn(0f, 1f) else 0f
+    val shownMs = scrub?.let { (it * dur).toLong() } ?: pos
     Column(Modifier.fillMaxWidth()) {
-        ScrubBubble(scrub, pos, song.durationMs)
+        ScrubBubble(scrub, pos, dur)
         Waveform(
             seed = song.id,
             progress = frac,
             playing = playing,
-            onSeek = { f -> vm.seekToFraction(f, song.durationMs) },
+            onSeek = { f -> vm.seekToFraction(f, dur) },
             onScrub = { scrub = it },
             modifier = Modifier.fillMaxWidth().height(60.dp),
         )
@@ -305,7 +307,7 @@ private fun LockProgress(song: Song, playing: Boolean, vm: MainViewModel) {
         Row(Modifier.fillMaxWidth()) {
             Text(fmt(shownMs), fontSize = 12.sp, color = Color.White.copy(alpha = 0.6f), fontWeight = FontWeight.Medium)
             Spacer(Modifier.weight(1f))
-            Text(fmt(song.durationMs), fontSize = 12.sp, color = Color.White.copy(alpha = 0.6f), fontWeight = FontWeight.Medium)
+            Text(fmt(dur), fontSize = 12.sp, color = Color.White.copy(alpha = 0.6f), fontWeight = FontWeight.Medium)
         }
     }
 }
