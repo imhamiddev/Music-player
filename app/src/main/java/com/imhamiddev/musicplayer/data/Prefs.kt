@@ -50,4 +50,54 @@ class Prefs(context: Context) {
     fun saveSort(field: SortField, asc: Boolean) {
         sp.edit().putString("sort_field", field.name).putBoolean("sort_asc", asc).apply()
     }
+
+    // ---- Language and player look --------------------------------------------------------------
+
+    fun language(): AppLanguage =
+        runCatching { AppLanguage.valueOf(sp.getString("language", null) ?: "") }
+            .getOrDefault(AppLanguage.English)
+
+    fun saveLanguage(language: AppLanguage) {
+        sp.edit().putString("language", language.name).apply()
+    }
+
+    fun progressStyle(): ProgressStyle =
+        runCatching { ProgressStyle.valueOf(sp.getString("progress_style", null) ?: "") }
+            .getOrDefault(ProgressStyle.Waveform)
+
+    fun saveProgressStyle(style: ProgressStyle) {
+        sp.edit().putString("progress_style", style.name).apply()
+    }
+
+    // ---- Listening statistics (JSON owned by ListenStats) --------------------------------------
+
+    fun statsJson(): String = sp.getString("listen_stats", "{}") ?: "{}"
+
+    fun saveStatsJson(json: String) {
+        sp.edit().putString("listen_stats", json).apply()
+    }
+
+    // ---- Last playback state, so the app reopens where it was left -----------------------------
+
+    fun playbackQueue(): List<Long> = readIds("pb_queue")
+
+    fun savePlaybackQueue(ids: List<Long>) = writeIds("pb_queue", ids)
+
+    fun playbackIndex(): Int = sp.getInt("pb_index", 0)
+
+    fun playbackPosition(): Long = sp.getLong("pb_position", 0L)
+
+    fun playbackShuffle(): Boolean = sp.getBoolean("pb_shuffle", false)
+
+    /** 0 = off, 1 = one, 2 = all (Player.REPEAT_MODE_*). */
+    fun playbackRepeat(): Int = sp.getInt("pb_repeat", 0)
+
+    fun savePlaybackPosition(index: Int, positionMs: Long, shuffle: Boolean, repeat: Int) {
+        sp.edit()
+            .putInt("pb_index", index)
+            .putLong("pb_position", positionMs)
+            .putBoolean("pb_shuffle", shuffle)
+            .putInt("pb_repeat", repeat)
+            .apply()
+    }
 }

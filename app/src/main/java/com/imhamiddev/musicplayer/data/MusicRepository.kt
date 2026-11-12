@@ -53,11 +53,11 @@ object MusicRepository {
                     } else rawTitle
                     val rawArtist = c.getString(artistCol)
                     val artist = if (rawArtist.isNullOrBlank() || rawArtist == MediaStore.UNKNOWN_STRING) {
-                        "Unknown artist"
+                        Song.UNKNOWN_ARTIST
                     } else rawArtist
                     val rawAlbum = c.getString(albumCol)
                     val album = if (rawAlbum.isNullOrBlank() || rawAlbum == MediaStore.UNKNOWN_STRING) {
-                        "Unknown album"
+                        Song.UNKNOWN_ALBUM
                     } else rawAlbum
                     result.add(
                         Song(
