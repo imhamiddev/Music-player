@@ -104,10 +104,10 @@ fun PlayerScreen(
                 },
                 onDragStopped = { v ->
                     if (offsetY.value > heightPx * 0.2f || v > 1800f) {
-                        offsetY.animateTo(heightPx, tween(240))
+                        offsetY.animateTo(heightPx, tween(624, easing = Motion.Silk))
                         onClose()
                     } else {
-                        offsetY.animateTo(0f, spring(dampingRatio = 0.8f, stiffness = 350f))
+                        offsetY.animateTo(0f, Motion.soft())
                     }
                 },
             )
@@ -145,13 +145,13 @@ fun PlayerScreen(
             BoxWithConstraints(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                 val side = minOf(maxWidth - 56.dp, maxHeight - 8.dp).coerceAtLeast(120.dp)
                 val artScale by animateFloatAsState(
-                    if (isPlaying) 1f else 0.9f, spring(dampingRatio = 0.6f, stiffness = 300f), label = "artscale",
+                    if (isPlaying) 1f else 0.9f, Motion.soft(), label = "artscale",
                 )
                 AnimatedContent(
                     targetState = song,
                     contentKey = { it.id },
                     transitionSpec = {
-                        (fadeIn(tween(350)) + scaleIn(tween(350), initialScale = 0.9f)) togetherWith fadeOut(tween(200))
+                        (fadeIn(tween(910, easing = Motion.Silk)) + scaleIn(tween(910, easing = Motion.Silk), initialScale = 0.9f)) togetherWith fadeOut(tween(600, easing = Motion.Silk))
                     },
                     modifier = Modifier
                         .size(side)
@@ -260,8 +260,8 @@ private fun DeckSkip(icon: ImageVector, onClick: () -> Unit) {
 
 @Composable
 private fun DeckToggle(icon: ImageVector, active: Boolean, onClick: () -> Unit) {
-    val tint by animateColorAsState(if (active) Ui.GreenB else Color.White.copy(alpha = 0.5f), tween(220), label = "dtint")
-    val bg by animateColorAsState(if (active) Color.White.copy(alpha = 0.12f) else Color.Transparent, tween(220), label = "dbg")
+    val tint by animateColorAsState(if (active) Ui.GreenB else Color.White.copy(alpha = 0.5f), tween(600, easing = Motion.Silk), label = "dtint")
+    val bg by animateColorAsState(if (active) Color.White.copy(alpha = 0.12f) else Color.Transparent, tween(600, easing = Motion.Silk), label = "dbg")
     Box(
         Modifier.size(48.dp).bouncyClick(0.85f, onClick = onClick).clip(CircleShape).background(bg),
         contentAlignment = Alignment.Center,

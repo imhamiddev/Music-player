@@ -108,6 +108,7 @@ fun LibraryScreen(
     actions: SongActions,
     onPlay: (Song, List<Song>) -> Unit,
     onOpenPlayer: () -> Unit,
+    topInset: Dp = 0.dp,
 ) {
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var openFolder by rememberSaveable { mutableStateOf<String?>(null) }
@@ -167,7 +168,7 @@ fun LibraryScreen(
         else -> recentList.size
     }
 
-    Column(Modifier.fillMaxSize().statusBarsPadding()) {
+    Column(Modifier.fillMaxSize().statusBarsPadding().padding(top = topInset)) {
         // Header
         Row(
             Modifier.fillMaxWidth().padding(start = 24.dp, end = 20.dp, top = 14.dp),
@@ -178,8 +179,8 @@ fun LibraryScreen(
                 AnimatedContent(
                     targetState = subtitle,
                     transitionSpec = {
-                        (slideInVertically { it / 2 } + fadeIn(tween(200))) togetherWith
-                            (slideOutVertically { -it / 2 } + fadeOut(tween(120)))
+                        (slideInVertically(Motion.soft()) { it / 2 } + fadeIn(tween(600, easing = Motion.Silk))) togetherWith
+                            (slideOutVertically(Motion.soft()) { -it / 2 } + fadeOut(tween(600, easing = Motion.Silk)))
                     },
                     label = "subtitle",
                 ) { s -> Text(s, fontSize = 14.sp, color = Ui.Muted) }
@@ -191,8 +192,8 @@ fun LibraryScreen(
             Spacer(Modifier.width(10.dp))
             AnimatedVisibility(
                 visible = tab != 3,
-                enter = scaleIn(animationSpec = spring(0.6f, 400f)) + fadeIn(),
-                exit = scaleOut() + fadeOut(),
+                enter = scaleIn(animationSpec = Motion.soft()) + fadeIn(Motion.soft()),
+                exit = scaleOut(Motion.soft()) + fadeOut(Motion.soft()),
             ) {
                 Box {
                     IconCircle(Icons.Rounded.Sort, { sortOpen = true }, size = 48.dp, description = "Sort")
@@ -223,8 +224,8 @@ fun LibraryScreen(
                     targetState = tab,
                     transitionSpec = {
                         val dir = if (targetState > initialState) 1 else -1
-                        (slideInHorizontally(tween(320, easing = FastOutSlowInEasing)) { dir * it / 5 } + fadeIn(tween(240))) togetherWith
-                            (slideOutHorizontally(tween(220, easing = FastOutSlowInEasing)) { -dir * it / 6 } + fadeOut(tween(140)))
+                        (slideInHorizontally(tween(832, easing = Motion.Silk)) { dir * it / 5 } + fadeIn(tween(624, easing = Motion.Silk))) togetherWith
+                            (slideOutHorizontally(tween(600, easing = Motion.Silk)) { -dir * it / 6 } + fadeOut(tween(600, easing = Motion.Silk)))
                     },
                     label = "tabs",
                 ) { t ->
@@ -238,11 +239,11 @@ fun LibraryScreen(
                             targetState = openFolder,
                             transitionSpec = {
                                 if (targetState != null) {
-                                    (slideInHorizontally(tween(320, easing = FastOutSlowInEasing)) { it / 3 } + fadeIn(tween(240))) togetherWith
-                                        (slideOutHorizontally(tween(260, easing = FastOutSlowInEasing)) { -it / 5 } + fadeOut(tween(160)))
+                                    (slideInHorizontally(tween(832, easing = Motion.Silk)) { it / 3 } + fadeIn(tween(624, easing = Motion.Silk))) togetherWith
+                                        (slideOutHorizontally(tween(676, easing = Motion.Silk)) { -it / 5 } + fadeOut(tween(600, easing = Motion.Silk)))
                                 } else {
-                                    (slideInHorizontally(tween(320, easing = FastOutSlowInEasing)) { -it / 5 } + fadeIn(tween(240))) togetherWith
-                                        (slideOutHorizontally(tween(260, easing = FastOutSlowInEasing)) { it / 3 } + fadeOut(tween(160)))
+                                    (slideInHorizontally(tween(832, easing = Motion.Silk)) { -it / 5 } + fadeIn(tween(624, easing = Motion.Silk))) togetherWith
+                                        (slideOutHorizontally(tween(676, easing = Motion.Silk)) { it / 3 } + fadeOut(tween(600, easing = Motion.Silk)))
                                 }
                             },
                             label = "folders",
@@ -306,14 +307,11 @@ private fun SortMenu(
     onSort: (SortField) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
-    DropdownMenu(
+    SoftMenu(
         expanded = expanded,
-        onDismissRequest = onDismiss,
-        offset = DpOffset(0.dp, 8.dp),
+        onDismiss = onDismiss,
         shape = RoundedCornerShape(26.dp),
-        containerColor = Ui.Card,
-        tonalElevation = 0.dp,
-        shadowElevation = 18.dp,
+        gap = 8.dp,
     ) {
         Column(Modifier.width(250.dp).padding(8.dp)) {
             Text(
@@ -328,7 +326,7 @@ private fun SortMenu(
                 asc = asc,
             ) {
                 onSort(SortField.Alphabet)
-                scope.launch { delay(260); onDismiss() }
+                scope.launch { delay(450); onDismiss() }
             }
             Spacer(Modifier.height(4.dp))
             SortOption(
@@ -339,7 +337,7 @@ private fun SortMenu(
                 asc = asc,
             ) {
                 onSort(SortField.DateAdded)
-                scope.launch { delay(260); onDismiss() }
+                scope.launch { delay(450); onDismiss() }
             }
         }
     }
@@ -354,8 +352,8 @@ private fun SortOption(
     asc: Boolean,
     onClick: () -> Unit,
 ) {
-    val bg by animateColorAsState(if (selected) Ui.GreenTint else Color.Transparent, tween(220), label = "sortbg")
-    val rot by animateFloatAsState(if (asc) 0f else 180f, spring(0.6f, 300f), label = "sortrot")
+    val bg by animateColorAsState(if (selected) Ui.GreenTint else Color.Transparent, tween(600, easing = Motion.Silk), label = "sortbg")
+    val rot by animateFloatAsState(if (asc) 0f else 180f, Motion.soft(), label = "sortrot")
     Row(
         Modifier
             .fillMaxWidth()
@@ -371,7 +369,7 @@ private fun SortOption(
             Text(label, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Ui.Ink)
             Text(detail, fontSize = 12.sp, color = Ui.Muted)
         }
-        AnimatedVisibility(visible = selected, enter = scaleIn(animationSpec = spring(0.5f, 500f)) + fadeIn(), exit = scaleOut() + fadeOut()) {
+        AnimatedVisibility(visible = selected, enter = scaleIn(animationSpec = Motion.soft()) + fadeIn(Motion.soft()), exit = scaleOut(Motion.soft()) + fadeOut(Motion.soft())) {
             Box(Modifier.size(28.dp).clip(CircleShape).background(Ui.GreenBrush), contentAlignment = Alignment.Center) {
                 Icon(
                     Icons.Rounded.ArrowUpward, null, tint = Ui.OnAccent,
@@ -415,7 +413,7 @@ private fun SongList(
                 isFav = song.id in favorites,
                 onClick = { if (isCurrent) onOpenPlayer() else onPlay(song, items) },
                 actions = actions,
-                modifier = Modifier.animateItem(),
+                modifier = Modifier.animateItem(fadeInSpec = Motion.soft(), placementSpec = Motion.soft(), fadeOutSpec = Motion.soft()),
             )
         }
     }
@@ -439,8 +437,8 @@ private fun SongRow(
             shown = true
         }
     }
-    val a by animateFloatAsState(if (shown) 1f else 0f, tween(420, easing = FastOutSlowInEasing), label = "rowa")
-    val bg by animateColorAsState(if (isCurrent) Ui.GreenTint else Ui.Card, tween(300), label = "rowbg")
+    val a by animateFloatAsState(if (shown) 1f else 0f, tween(1092, easing = Motion.Silk), label = "rowa")
+    val bg by animateColorAsState(if (isCurrent) Ui.GreenTint else Ui.Card, tween(780, easing = Motion.Silk), label = "rowbg")
     Row(
         modifier
             .graphicsLayer { alpha = a; translationY = (1f - a) * 26.dp.toPx() }
@@ -464,7 +462,7 @@ private fun SongRow(
                 maxLines = 1, overflow = TextOverflow.Ellipsis,
             )
         }
-        AnimatedVisibility(visible = isCurrent, enter = scaleIn() + fadeIn(), exit = scaleOut() + fadeOut()) {
+        AnimatedVisibility(visible = isCurrent, enter = scaleIn(Motion.soft()) + fadeIn(Motion.soft()), exit = scaleOut(Motion.soft()) + fadeOut(Motion.soft())) {
             EqualizerBars(isPlaying, Modifier.padding(horizontal = 8.dp))
         }
         SongMenuButton(song, isFav, actions)
@@ -490,7 +488,7 @@ private fun FolderList(
         items(folders, key = { it.path }) { g ->
             Row(
                 Modifier
-                    .animateItem()
+                    .animateItem(fadeInSpec = Motion.soft(), placementSpec = Motion.soft(), fadeOutSpec = Motion.soft())
                     .fillMaxWidth()
                     .bouncyClick(0.97f) { onOpen(g) }
                     .clip(RoundedCornerShape(22.dp))
@@ -524,7 +522,7 @@ private fun FolderList(
 private fun EmptyState(info: EmptyInfo, modifier: Modifier = Modifier) {
     var shown by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { shown = true }
-    val s by animateFloatAsState(if (shown) 1f else 0.7f, spring(0.55f, 300f), label = "emptys")
+    val s by animateFloatAsState(if (shown) 1f else 0.7f, Motion.soft(), label = "emptys")
     Column(
         modifier.fillMaxSize().padding(horizontal = 48.dp).graphicsLayer { scaleX = s; scaleY = s; alpha = (s - 0.7f) / 0.3f },
         verticalArrangement = Arrangement.Center,

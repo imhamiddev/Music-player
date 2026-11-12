@@ -71,14 +71,10 @@ fun SongMenuButton(song: Song, isFav: Boolean, actions: SongActions, modifier: M
         Box(Modifier.size(40.dp).bouncyClick(0.85f) { open = true }, contentAlignment = Alignment.Center) {
             Icon(Icons.Rounded.MoreVert, "More", tint = Ui.Muted, modifier = Modifier.size(22.dp))
         }
-        DropdownMenu(
+        SoftMenu(
             expanded = open,
-            onDismissRequest = { open = false },
-            offset = DpOffset(0.dp, 0.dp),
+            onDismiss = { open = false },
             shape = RoundedCornerShape(22.dp),
-            containerColor = Ui.Card,
-            tonalElevation = 0.dp,
-            shadowElevation = 18.dp,
         ) {
             Column(Modifier.width(220.dp).padding(6.dp)) {
                 MenuItem(Icons.Rounded.SkipNext, "Play next") { open = false; actions.onPlayNext(song) }
@@ -121,12 +117,11 @@ private fun MenuItem(
 // ---- Dialogs -------------------------------------------------------------------------------
 
 @Composable
-fun RenameDialog(song: Song, onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
+fun RenameDialog(song: Song, visible: Boolean = true, onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
     var text by remember(song.id) { mutableStateOf(song.title) }
-    AlertDialog(
+    SoftAlertDialog(
+        visible = visible,
         onDismissRequest = onDismiss,
-        containerColor = Ui.Card,
-        shape = RoundedCornerShape(28.dp),
         title = { Text("Rename", color = Ui.Ink, fontWeight = FontWeight.Bold) },
         text = {
             Column {
@@ -152,11 +147,10 @@ fun RenameDialog(song: Song, onDismiss: () -> Unit, onConfirm: (String) -> Unit)
 }
 
 @Composable
-fun DetailsDialog(song: Song, onDismiss: () -> Unit) {
-    AlertDialog(
+fun DetailsDialog(song: Song, visible: Boolean = true, onDismiss: () -> Unit) {
+    SoftAlertDialog(
+        visible = visible,
         onDismissRequest = onDismiss,
-        containerColor = Ui.Card,
-        shape = RoundedCornerShape(28.dp),
         title = { Text("Details", color = Ui.Ink, fontWeight = FontWeight.Bold) },
         text = {
             Column {
@@ -182,11 +176,10 @@ private fun DetailRow(label: String, value: String) {
 }
 
 @Composable
-fun DeleteDialog(song: Song, onDismiss: () -> Unit, onConfirm: () -> Unit) {
-    AlertDialog(
+fun DeleteDialog(song: Song, visible: Boolean = true, onDismiss: () -> Unit, onConfirm: () -> Unit) {
+    SoftAlertDialog(
+        visible = visible,
         onDismissRequest = onDismiss,
-        containerColor = Ui.Card,
-        shape = RoundedCornerShape(28.dp),
         title = { Text("Delete song?", color = Ui.Ink, fontWeight = FontWeight.Bold) },
         text = { Text("\u201C${song.title}\u201D will be permanently deleted from your device.", color = Ui.Muted, fontSize = 14.sp) },
         confirmButton = { TextButton(onClick = onConfirm) { Text("Delete", color = Ui.Danger, fontWeight = FontWeight.SemiBold) } },

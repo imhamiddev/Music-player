@@ -75,6 +75,7 @@ import com.imhamiddev.musicplayer.MainViewModel
 import com.imhamiddev.musicplayer.data.Prefs
 import com.imhamiddev.musicplayer.data.Song
 import com.imhamiddev.musicplayer.data.ThemeMode
+import com.imhamiddev.musicplayer.data.UpdateState
 import kotlinx.coroutines.flow.StateFlow
 
 private fun audioPermission(): String =
@@ -109,6 +110,7 @@ fun MusicApp(vm: MainViewModel) {
     var denied by remember { mutableStateOf(false) }
     var playerOpen by rememberSaveable { mutableStateOf(false) }
     val themeMode by vm.themeMode.collectAsState()
+    val updateState by vm.update.collectAsState()
 
     var renameTarget by remember { mutableStateOf<Song?>(null) }
     var detailsTarget by remember { mutableStateOf<Song?>(null) }
@@ -147,6 +149,7 @@ fun MusicApp(vm: MainViewModel) {
         val g = hasAudioPermission(ctx)
         granted = g
         if (g) vm.loadSongs()
+        vm.checkForUpdate()
     }
 
     if (!granted) {
@@ -185,8 +188,14 @@ fun MusicApp(vm: MainViewModel) {
     val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val bottomInset by animateDpAsState(
         if (current != null) navBottom + 94.dp else navBottom + 24.dp,
-        spring(dampingRatio = 0.85f, stiffness = 300f),
+        Motion.soft(),
         label = "inset",
+    )
+
+    val bannerPush by animateDpAsState(
+        if (updateState != UpdateState.None) UpdateBannerHeight + 3.dp else 0.dp,
+        Motion.soft(Motion.Long),
+        label = "bannerPush",
     )
 
     Box(Modifier.fillMaxSize().background(Ui.Bg)) {
@@ -208,13 +217,22 @@ fun MusicApp(vm: MainViewModel) {
             actions = actions,
             onPlay = vm::play,
             onOpenPlayer = { playerOpen = true },
+            topInset = bannerPush,
+        )
+
+        UpdateBanner(
+            state = updateState,
+            onDownload = vm::downloadUpdate,
+            onInstall = vm::installUpdate,
+            onDismiss = vm::dismissUpdate,
+            modifier = Modifier.align(Alignment.TopCenter),
         )
 
         AnimatedVisibility(
             visible = current != null,
             modifier = Modifier.align(Alignment.BottomCenter),
-            enter = slideInVertically(spring(dampingRatio = 0.75f, stiffness = 380f)) { it } + fadeIn(),
-            exit = slideOutVertically { it } + fadeOut(),
+            enter = slideInVertically(Motion.soft()) { it } + fadeIn(Motion.soft()),
+            exit = slideOutVertically(Motion.soft()) { it } + fadeOut(Motion.soft()),
         ) {
             current?.let {
                 MiniPlayer(
@@ -231,8 +249,8 @@ fun MusicApp(vm: MainViewModel) {
 
         AnimatedVisibility(
             visible = playerOpen && current != null,
-            enter = slideInVertically(spring(dampingRatio = 0.86f, stiffness = 320f)) { it } + fadeIn(tween(150)),
-            exit = slideOutVertically(tween(280, easing = FastOutSlowInEasing)) { it } + fadeOut(tween(200)),
+            enter = slideInVertically(Motion.soft()) { it } + fadeIn(tween(600, easing = Motion.Silk)),
+            exit = slideOutVertically(tween(728, easing = Motion.Silk)) { it } + fadeOut(tween(600, easing = Motion.Silk)),
         ) {
             current?.let { song ->
                 PlayerScreen(
@@ -257,47 +275,47 @@ fun MusicApp(vm: MainViewModel) {
         BackHandler(enabled = playerOpen) { playerOpen = false }
     }
 
-    renameTarget?.let { t ->
-        RenameDialog(t, onDismiss = { renameTarget = null }) { name ->
+    val rn = rememberHeld(renameTarget)
+    rn?.let { t ->
+        RenameDialog(t, visible = renameTarget != null, onDismiss = { renameTarget = null }) { name ->
             vm.renameSong(t, name)
             renameTarget = null
         }
     }
-    detailsTarget?.let { t -> DetailsDialog(t) { detailsTarget = null } }
-    deleteTarget?.let { t ->
-        DeleteDialog(t, onDismiss = { deleteTarget = null }) {
+    val dt = rememberHeld(detailsTarget)
+    dt?.let { t -> DetailsDialog(t, visible = detailsTarget != null) { detailsTarget = null } }
+    val del = rememberHeld(deleteTarget)
+    del?.let { t ->
+        DeleteDialog(t, visible = deleteTarget != null, onDismiss = { deleteTarget = null }) {
             deleteTarget = null
             startDelete(t)
         }
     }
-    if (askFullScreen) {
-        AlertDialog(
-            onDismissRequest = { askFullScreen = false; Prefs(ctx).setFsiAsked() },
-            containerColor = Ui.Card,
-            shape = RoundedCornerShape(28.dp),
-            title = { Text("Lock screen player", color = Ui.Ink, fontWeight = FontWeight.Bold) },
-            text = {
-                Text(
-                    "Allow full-screen notifications so the player can take over your lock screen while music is playing.",
-                    color = Ui.Muted, fontSize = 14.sp,
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    askFullScreen = false
-                    Prefs(ctx).setFsiAsked()
-                    runCatching {
-                        ctx.startActivity(
-                            Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT, Uri.fromParts("package", ctx.packageName, null)),
-                        )
-                    }
-                }) { Text("Allow", color = Ui.Ink, fontWeight = FontWeight.SemiBold) }
-            },
-            dismissButton = {
-                TextButton(onClick = { askFullScreen = false; Prefs(ctx).setFsiAsked() }) { Text("Not now", color = Ui.Muted) }
-            },
-        )
-    }
+    SoftAlertDialog(
+        visible = askFullScreen,
+        onDismissRequest = { askFullScreen = false; Prefs(ctx).setFsiAsked() },
+        title = { Text("Lock screen player", color = Ui.Ink, fontWeight = FontWeight.Bold) },
+        text = {
+            Text(
+                "Allow full-screen notifications so the player can take over your lock screen while music is playing.",
+                color = Ui.Muted, fontSize = 14.sp,
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                askFullScreen = false
+                Prefs(ctx).setFsiAsked()
+                runCatching {
+                    ctx.startActivity(
+                        Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT, Uri.fromParts("package", ctx.packageName, null)),
+                    )
+                }
+            }) { Text("Allow", color = Ui.Ink, fontWeight = FontWeight.SemiBold) }
+        },
+        dismissButton = {
+            TextButton(onClick = { askFullScreen = false; Prefs(ctx).setFsiAsked() }) { Text("Not now", color = Ui.Muted) }
+        },
+    )
 }
 
 @Composable
@@ -369,7 +387,7 @@ private fun PermissionScreen(denied: Boolean, onClick: () -> Unit) {
     ) {
         AnimatedVisibility(
             visible = shown,
-            enter = slideInVertically(spring(dampingRatio = 0.7f, stiffness = 200f)) { it / 6 } + fadeIn(tween(400)),
+            enter = slideInVertically(Motion.soft()) { it / 6 } + fadeIn(tween(1040, easing = Motion.Silk)),
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Box(

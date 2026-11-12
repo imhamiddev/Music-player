@@ -22,6 +22,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import com.imhamiddev.musicplayer.ui.Motion
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
@@ -209,7 +210,7 @@ private fun LockScreenContent(vm: MainViewModel, onUnlock: () -> Unit) {
                     if (dy.value < -260f || v < -1600f) {
                         onUnlock()
                     }
-                    dy.animateTo(0f, spring(dampingRatio = 0.8f, stiffness = 350f))
+                    dy.animateTo(0f, Motion.soft())
                 },
             ),
     ) {
