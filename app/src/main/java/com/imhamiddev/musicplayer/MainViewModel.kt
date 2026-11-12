@@ -18,6 +18,10 @@ import com.imhamiddev.musicplayer.data.Prefs
 import com.imhamiddev.musicplayer.data.Song
 import com.imhamiddev.musicplayer.data.SortField
 import com.imhamiddev.musicplayer.data.ThemeMode
+import com.imhamiddev.musicplayer.data.UpdateState
+import com.imhamiddev.musicplayer.data.Updater
+import android.net.ConnectivityManager
+import android.net.Network
 import com.imhamiddev.musicplayer.playback.PlaybackService
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -77,6 +81,68 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _positionMs = MutableStateFlow(0L)
     val positionMs: StateFlow<Long> = _positionMs.asStateFlow()
 
+    // ---- App updates (GitHub releases) -------------------------------------------------------
+
+    private val _update = MutableStateFlow<UpdateState>(UpdateState.None)
+    val update: StateFlow<UpdateState> = _update.asStateFlow()
+    private var checking = false
+    private var dismissedVersion: String? = null
+    private val netCallback = object : ConnectivityManager.NetworkCallback() {
+        override fun onAvailable(network: Network) {
+            checkForUpdate()
+        }
+    }
+
+    fun checkForUpdate() {
+        if (checking || _update.value != UpdateState.None) return
+        val app = getApplication<Application>()
+        if (!Updater.isOnline(app)) return
+        checking = true
+        viewModelScope.launch {
+            val info = try { Updater.check(app) } finally { checking = false }
+            if (info != null && info.version != dismissedVersion && _update.value == UpdateState.None) {
+                _update.value = UpdateState.Available(info)
+            }
+        }
+    }
+
+    /** Only runs after the user taps Download. */
+    fun downloadUpdate() {
+        val info = when (val s = _update.value) {
+            is UpdateState.Available -> s.info
+            is UpdateState.Failed -> s.info
+            else -> return
+        }
+        _update.value = UpdateState.Downloading(info, 0f)
+        viewModelScope.launch {
+            try {
+                val file = Updater.download(getApplication(), info) { p ->
+                    _update.value = UpdateState.Downloading(info, p)
+                }
+                _update.value = UpdateState.Ready(info, file)
+            } catch (_: Exception) {
+                _update.value = UpdateState.Failed(info)
+            }
+        }
+    }
+
+    fun installUpdate() {
+        val s = _update.value as? UpdateState.Ready ?: return
+        Updater.install(getApplication(), s.file)
+    }
+
+    fun dismissUpdate() {
+        val s = _update.value
+        val v = when (s) {
+            is UpdateState.Available -> s.info.version
+            is UpdateState.Failed -> s.info.version
+            is UpdateState.Ready -> s.info.version
+            else -> null
+        }
+        if (v != null) dismissedVersion = v
+        if (s !is UpdateState.Downloading) _update.value = UpdateState.None
+    }
+
     private var controller: MediaController? = null
     private val controllerFuture: ListenableFuture<MediaController>
 
@@ -117,6 +183,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             } catch (_: Exception) {
             }
         }, ContextCompat.getMainExecutor(app))
+
+        runCatching { app.getSystemService(ConnectivityManager::class.java)?.registerDefaultNetworkCallback(netCallback) }
 
         viewModelScope.launch {
             while (isActive) {
@@ -279,6 +347,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     override fun onCleared() {
+        runCatching { getApplication<Application>().getSystemService(ConnectivityManager::class.java)?.unregisterNetworkCallback(netCallback) }
         controller?.removeListener(listener)
         MediaController.releaseFuture(controllerFuture)
         super.onCleared()
