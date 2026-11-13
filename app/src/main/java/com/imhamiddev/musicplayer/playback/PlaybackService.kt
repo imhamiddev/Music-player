@@ -9,11 +9,16 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
+import android.os.SystemClock
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
+import androidx.media3.common.Timeline
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.SeekParameters
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
@@ -24,10 +29,116 @@ import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import com.imhamiddev.musicplayer.LockScreenActivity
 import com.imhamiddev.musicplayer.MainActivity
+import com.imhamiddev.musicplayer.data.ListenStats
+import com.imhamiddev.musicplayer.data.Prefs
 
 class PlaybackService : MediaSessionService() {
 
     private var mediaSession: MediaSession? = null
+    private lateinit var prefs: Prefs
+    private val handler = Handler(Looper.getMainLooper())
+
+    // ---- Listening stats + "resume where you left off" ------------------------------------------
+
+    private var lastTickAt = 0L
+    private var itemId: Long? = null
+    private var itemListenedMs = 0L
+    private var itemCounted = false
+    private var sinceSaveMs = 0L
+
+    private val tick = object : Runnable {
+        override fun run() {
+            val player = mediaSession?.player ?: return
+            record(player)
+            if (player.isPlaying) handler.postDelayed(this, TICK_MS)
+        }
+    }
+
+    /** Books the time since the last tick as listening time for the current song. */
+    private fun record(player: Player) {
+        val now = SystemClock.elapsedRealtime()
+        val delta = (now - lastTickAt).coerceIn(0L, 3 * TICK_MS)
+        lastTickAt = now
+        val id = itemId
+        if (id == null || delta <= 0L || !player.isPlaying) return
+        itemListenedMs += delta
+        // A song counts as "played" once you really listened to part of it, not on a skip.
+        val dur = player.duration
+        val needed = if (dur > 0L) minOf(PLAY_MS, maxOf(MIN_PLAY_MS, dur / 2)) else PLAY_MS
+        val countsNow = !itemCounted && itemListenedMs >= needed
+        if (countsNow) itemCounted = true
+        ListenStats.add(id, delta, countsNow)
+        sinceSaveMs += delta
+        if (sinceSaveMs >= SAVE_EVERY_MS) {
+            sinceSaveMs = 0L
+            ListenStats.flush()
+            savePosition(player)
+        }
+    }
+
+    private fun saveQueue(player: Player) {
+        if (player.mediaItemCount == 0) return
+        val ids = ArrayList<Long>(player.mediaItemCount)
+        for (i in 0 until player.mediaItemCount) {
+            player.getMediaItemAt(i).mediaId.toLongOrNull()?.let { ids.add(it) }
+        }
+        if (ids.isNotEmpty()) prefs.savePlaybackQueue(ids)
+    }
+
+    private fun savePosition(player: Player) {
+        val id = player.currentMediaItem?.mediaId?.toLongOrNull() ?: return
+        prefs.savePlaybackPosition(id, player.currentPosition.coerceAtLeast(0L), player.shuffleModeEnabled, player.repeatMode)
+    }
+
+    private fun saveState(player: Player) {
+        ListenStats.flush()
+        saveQueue(player)
+        savePosition(player)
+    }
+
+    private val stateListener = object : Player.Listener {
+        override fun onIsPlayingChanged(isPlaying: Boolean) {
+            val player = mediaSession?.player ?: return
+            handler.removeCallbacks(tick)
+            if (isPlaying) {
+                lastTickAt = SystemClock.elapsedRealtime()
+                handler.postDelayed(tick, TICK_MS)
+            } else {
+                saveState(player)
+            }
+        }
+
+        override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+            val player = mediaSession?.player ?: return
+            // Book what was heard of the previous song before the counters reset.
+            if (player.isPlaying) record(player)
+            itemId = mediaItem?.mediaId?.toLongOrNull()
+            itemListenedMs = 0L
+            itemCounted = false
+            lastTickAt = SystemClock.elapsedRealtime()
+            savePosition(player)
+        }
+
+        override fun onTimelineChanged(timeline: Timeline, reason: Int) {
+            mediaSession?.player?.let { saveQueue(it) }
+        }
+
+        override fun onPositionDiscontinuity(
+            oldPosition: Player.PositionInfo,
+            newPosition: Player.PositionInfo,
+            reason: Int,
+        ) {
+            if (reason == Player.DISCONTINUITY_REASON_SEEK) mediaSession?.player?.let { savePosition(it) }
+        }
+
+        override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) {
+            mediaSession?.player?.let { savePosition(it) }
+        }
+
+        override fun onRepeatModeChanged(repeatMode: Int) {
+            mediaSession?.player?.let { savePosition(it) }
+        }
+    }
 
     private val screenReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -79,6 +190,8 @@ class PlaybackService : MediaSessionService() {
 
     override fun onCreate() {
         super.onCreate()
+        prefs = Prefs(this)
+        ListenStats.init(this)
         // Exact seeking: without this ExoPlayer snaps to the nearest sync point, which is off by seconds on many MP3s.
         val extractors = DefaultExtractorsFactory().setConstantBitrateSeekingEnabled(true)
         val player = ExoPlayer.Builder(this, DefaultMediaSourceFactory(this, extractors))
@@ -93,6 +206,8 @@ class PlaybackService : MediaSessionService() {
             .setHandleAudioBecomingNoisy(true)
             .setWakeMode(C.WAKE_MODE_LOCAL)
             .build()
+
+        player.addListener(stateListener)
 
         ContextCompat.registerReceiver(
             this, screenReceiver, IntentFilter(Intent.ACTION_SCREEN_ON), ContextCompat.RECEIVER_NOT_EXPORTED,
@@ -125,12 +240,16 @@ class PlaybackService : MediaSessionService() {
 
     override fun onTaskRemoved(rootIntent: Intent?) {
         val player = mediaSession?.player
+        if (player != null) saveState(player)
         if (player == null || !player.playWhenReady || player.mediaItemCount == 0) stopSelf()
     }
 
     override fun onDestroy() {
+        handler.removeCallbacks(tick)
         runCatching { unregisterReceiver(screenReceiver) }
         mediaSession?.run {
+            saveState(player)
+            player.removeListener(stateListener)
             player.release()
             release()
         }
@@ -140,5 +259,9 @@ class PlaybackService : MediaSessionService() {
 
     private companion object {
         const val LOCK_CHANNEL = "lock_player"
+        const val TICK_MS = 1000L
+        const val PLAY_MS = 20_000L
+        const val MIN_PLAY_MS = 5_000L
+        const val SAVE_EVERY_MS = 10_000L
     }
 }
