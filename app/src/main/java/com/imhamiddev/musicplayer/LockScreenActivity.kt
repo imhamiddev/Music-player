@@ -49,6 +49,7 @@ import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -67,20 +68,24 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import com.imhamiddev.musicplayer.data.ProgressStyle
 import com.imhamiddev.musicplayer.data.Song
 import com.imhamiddev.musicplayer.ui.AlbumArt
+import com.imhamiddev.musicplayer.ui.LocalStrings
 import com.imhamiddev.musicplayer.ui.PlayPauseIcon
 import com.imhamiddev.musicplayer.ui.ScrubBubble
+import com.imhamiddev.musicplayer.ui.SeekBar
 import com.imhamiddev.musicplayer.ui.Ui
-import com.imhamiddev.musicplayer.ui.Waveform
+import com.imhamiddev.musicplayer.ui.stringsFor
 import com.imhamiddev.musicplayer.ui.bouncyClick
-import com.imhamiddev.musicplayer.ui.fmt
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -123,7 +128,16 @@ class LockScreenActivity : ComponentActivity() {
             this, unlockReceiver, IntentFilter(Intent.ACTION_USER_PRESENT), ContextCompat.RECEIVER_NOT_EXPORTED,
         )
         vm.loadSongs()
-        setContent { LockScreenContent(vm, onUnlock = ::unlock) }
+        setContent {
+            val language by vm.language.collectAsState()
+            val strings = stringsFor(language)
+            CompositionLocalProvider(
+                LocalStrings provides strings,
+                LocalLayoutDirection provides if (strings.rtl) LayoutDirection.Rtl else LayoutDirection.Ltr,
+            ) {
+                LockScreenContent(vm, onUnlock = ::unlock)
+            }
+        }
     }
 
     private fun unlock() {
@@ -177,6 +191,8 @@ private fun LockScreenContent(vm: MainViewModel, onUnlock: () -> Unit) {
     val current: Song? = remember(songs, currentId) { songs.firstOrNull { it.id == currentId } }
 
     val ctx = LocalContext.current
+    val str = LocalStrings.current
+    val progressStyle by vm.progressStyle.collectAsState()
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) {
         while (true) {
@@ -184,8 +200,11 @@ private fun LockScreenContent(vm: MainViewModel, onUnlock: () -> Unit) {
             delay(1000L - now % 1000L)
         }
     }
-    val timeText = remember(now / 60000L) { android.text.format.DateFormat.getTimeFormat(ctx).format(Date(now)) }
-    val dateText = remember(now / 3600000L) { SimpleDateFormat("EEEE, d MMMM", Locale.getDefault()).format(Date(now)) }
+    val timeText = remember(now / 60000L, str) { str.digits(android.text.format.DateFormat.getTimeFormat(ctx).format(Date(now))) }
+    val dateText = remember(now / 3600000L, str) {
+        val locale = if (str.rtl) Locale("fa") else Locale.getDefault()
+        str.digits(SimpleDateFormat("EEEE, d MMMM", locale).format(Date(now)))
+    }
 
     val dy = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
@@ -227,7 +246,7 @@ private fun LockScreenContent(vm: MainViewModel, onUnlock: () -> Unit) {
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Spacer(Modifier.height(28.dp))
-            Text(timeText, color = Color.White, fontSize = 64.sp, fontWeight = FontWeight.Light, letterSpacing = (-2).sp)
+            Text(timeText, color = Color.White, fontSize = 64.sp, fontWeight = FontWeight.Light, letterSpacing = str.ls((-2).sp))
             Text(dateText, color = Color.White.copy(alpha = 0.65f), fontSize = 16.sp, fontWeight = FontWeight.Medium)
 
             if (current == null) {
@@ -251,13 +270,14 @@ private fun LockScreenContent(vm: MainViewModel, onUnlock: () -> Unit) {
                 )
                 Spacer(Modifier.height(2.dp))
                 Text(
-                    current.artist, color = Color.White.copy(alpha = 0.6f), fontSize = 15.sp,
+                    str.artist(current.artist), color = Color.White.copy(alpha = 0.6f), fontSize = 15.sp,
                     maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Spacer(Modifier.height(10.dp))
-                LockProgress(current, isPlaying, vm)
+                LockProgress(current, isPlaying, progressStyle, vm)
                 Spacer(Modifier.height(10.dp))
+                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
                 Row(
                     Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceEvenly,
@@ -276,6 +296,7 @@ private fun LockScreenContent(vm: MainViewModel, onUnlock: () -> Unit) {
                         contentAlignment = Alignment.Center,
                     ) { Icon(Icons.Rounded.SkipNext, "Next", tint = Color.White, modifier = Modifier.size(38.dp)) }
                 }
+                }
             }
 
             Spacer(Modifier.height(18.dp))
@@ -286,34 +307,41 @@ private fun LockScreenContent(vm: MainViewModel, onUnlock: () -> Unit) {
 }
 
 @Composable
-private fun LockProgress(song: Song, playing: Boolean, vm: MainViewModel) {
+private fun LockProgress(song: Song, playing: Boolean, style: ProgressStyle, vm: MainViewModel) {
+    val str = LocalStrings.current
     val pos by vm.positionMs.collectAsState()
     val liveDur by vm.durationMs.collectAsState()
     val dur = if (liveDur > 0L) liveDur else song.durationMs
     var scrub by remember { mutableStateOf<Float?>(null) }
     val frac = if (dur > 0) (pos.toFloat() / dur).coerceIn(0f, 1f) else 0f
     val shownMs = scrub?.let { (it * dur).toLong() } ?: pos
+    // Progress always runs left to right, so its time labels keep that order in Persian too.
+    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
     Column(Modifier.fillMaxWidth()) {
         ScrubBubble(scrub, pos, dur)
-        Waveform(
+        SeekBar(
+            style = style,
             seed = song.id,
             progress = frac,
             playing = playing,
             onSeek = { f -> vm.seekToFraction(f, dur) },
             onScrub = { scrub = it },
-            modifier = Modifier.fillMaxWidth().height(60.dp),
+            waveHeight = 60.dp,
+            modifier = Modifier.fillMaxWidth(),
         )
         Spacer(Modifier.height(6.dp))
         Row(Modifier.fillMaxWidth()) {
-            Text(fmt(shownMs), fontSize = 12.sp, color = Color.White.copy(alpha = 0.6f), fontWeight = FontWeight.Medium)
+            Text(str.time(shownMs), fontSize = 12.sp, color = Color.White.copy(alpha = 0.6f), fontWeight = FontWeight.Medium)
             Spacer(Modifier.weight(1f))
-            Text(fmt(dur), fontSize = 12.sp, color = Color.White.copy(alpha = 0.6f), fontWeight = FontWeight.Medium)
+            Text(str.time(dur), fontSize = 12.sp, color = Color.White.copy(alpha = 0.6f), fontWeight = FontWeight.Medium)
         }
+    }
     }
 }
 
 @Composable
 private fun SwipeHint() {
+    val str = LocalStrings.current
     val t = rememberInfiniteTransition(label = "hint")
     val bob by t.animateFloat(0f, 1f, infiniteRepeatable(tween(900), RepeatMode.Reverse), label = "bob")
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -321,6 +349,6 @@ private fun SwipeHint() {
             Icons.Rounded.KeyboardArrowUp, null, tint = Color.White.copy(alpha = 0.5f),
             modifier = Modifier.size(26.dp).graphicsLayer { translationY = -6.dp.toPx() * bob },
         )
-        Text("Swipe up to unlock", color = Color.White.copy(alpha = 0.5f), fontSize = 13.sp, fontWeight = FontWeight.Medium)
+        Text(str.swipeToUnlock, color = Color.White.copy(alpha = 0.5f), fontSize = 13.sp, fontWeight = FontWeight.Medium)
     }
 }

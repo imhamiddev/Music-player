@@ -74,7 +74,6 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import com.imhamiddev.musicplayer.MainViewModel
 import com.imhamiddev.musicplayer.data.Prefs
 import com.imhamiddev.musicplayer.data.Song
-import com.imhamiddev.musicplayer.data.ThemeMode
 import com.imhamiddev.musicplayer.data.UpdateState
 import kotlinx.coroutines.flow.StateFlow
 
@@ -105,6 +104,13 @@ fun MusicApp(vm: MainViewModel) {
     val isPlaying by vm.isPlaying.collectAsState()
     val shuffle by vm.shuffle.collectAsState()
     val repeat by vm.repeat.collectAsState()
+    val language by vm.language.collectAsState()
+    val progressStyle by vm.progressStyle.collectAsState()
+    val stats by vm.stats.collectAsState()
+    val str = LocalStrings.current
+
+    var statsOpen by rememberSaveable { mutableStateOf(false) }
+    var settingsOpen by rememberSaveable { mutableStateOf(false) }
 
     var granted by remember { mutableStateOf(hasAudioPermission(ctx)) }
     var denied by remember { mutableStateOf(false) }
@@ -131,7 +137,7 @@ fun MusicApp(vm: MainViewModel) {
     fun startDelete(song: Song) {
         pendingDelete = song
         deleteSong(
-            ctx, song,
+            ctx, song, str.cantDelete,
             launch = { sender -> deleteLauncher.launch(IntentSenderRequest.Builder(sender).build()) },
             onDone = { pendingDelete = null; vm.onSongsDeleted(setOf(song.id)) },
         )
@@ -153,7 +159,7 @@ fun MusicApp(vm: MainViewModel) {
     }
 
     if (!granted) {
-        PermissionScreen(denied) {
+        PermissionScreen(denied, str) {
             if (denied) {
                 ctx.startActivity(
                     Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", ctx.packageName, null)),
@@ -212,8 +218,8 @@ fun MusicApp(vm: MainViewModel) {
             bottomInset = bottomInset,
             onQuery = vm::setQuery,
             onSort = vm::setSort,
-            dark = Ui.dark,
-            onToggleTheme = { vm.setThemeMode(if (Ui.dark) ThemeMode.Light else ThemeMode.Dark) },
+            onOpenStats = { statsOpen = true },
+            onOpenSettings = { settingsOpen = true },
             actions = actions,
             onPlay = vm::play,
             onOpenPlayer = { playerOpen = true },
@@ -260,6 +266,7 @@ fun MusicApp(vm: MainViewModel) {
                     isFav = song.id in favorites,
                     shuffle = shuffle,
                     repeatMode = repeat,
+                    progressStyle = progressStyle,
                     positionFlow = vm.positionMs,
                     durationFlow = vm.durationMs,
                     onClose = { playerOpen = false },
@@ -273,8 +280,34 @@ fun MusicApp(vm: MainViewModel) {
                 )
             }
         }
-        // Registered after the library's own handler so it takes priority while the player is open.
+
+        AnimatedVisibility(
+            visible = statsOpen,
+            enter = slideInVertically(Motion.soft()) { it / 3 } + fadeIn(tween(260, easing = Motion.Silk)),
+            exit = slideOutVertically(tween(300, easing = Motion.Silk)) { it / 3 } + fadeOut(tween(220, easing = Motion.Silk)),
+        ) {
+            StatsScreen(stats = stats, songs = songs, onRefresh = vm::refreshStats, onClose = { statsOpen = false })
+        }
+
+        AnimatedVisibility(
+            visible = settingsOpen,
+            enter = slideInVertically(Motion.soft()) { it / 3 } + fadeIn(tween(260, easing = Motion.Silk)),
+            exit = slideOutVertically(tween(300, easing = Motion.Silk)) { it / 3 } + fadeOut(tween(220, easing = Motion.Silk)),
+        ) {
+            SettingsScreen(
+                language = language,
+                progressStyle = progressStyle,
+                themeMode = themeMode,
+                onLanguage = vm::setLanguage,
+                onProgressStyle = vm::setProgressStyle,
+                onTheme = vm::setThemeMode,
+                onClose = { settingsOpen = false },
+            )
+        }
+        // Registered after the library's own handler so they take priority while they are open.
         BackHandler(enabled = playerOpen) { playerOpen = false }
+        BackHandler(enabled = statsOpen) { statsOpen = false }
+        BackHandler(enabled = settingsOpen) { settingsOpen = false }
     }
 
     val rn = rememberHeld(renameTarget)
@@ -296,12 +329,9 @@ fun MusicApp(vm: MainViewModel) {
     SoftAlertDialog(
         visible = askFullScreen,
         onDismissRequest = { askFullScreen = false; Prefs(ctx).setFsiAsked() },
-        title = { Text("Lock screen player", color = Ui.Ink, fontWeight = FontWeight.Bold) },
+        title = { Text(str.lockPlayerTitle, color = Ui.Ink, fontWeight = FontWeight.Bold) },
         text = {
-            Text(
-                "Allow full-screen notifications so the player can take over your lock screen while music is playing.",
-                color = Ui.Muted, fontSize = 14.sp,
-            )
+            Text(str.lockPlayerBody, color = Ui.Muted, fontSize = 14.sp)
         },
         confirmButton = {
             TextButton(onClick = {
@@ -312,10 +342,10 @@ fun MusicApp(vm: MainViewModel) {
                         Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT, Uri.fromParts("package", ctx.packageName, null)),
                     )
                 }
-            }) { Text("Allow", color = Ui.Ink, fontWeight = FontWeight.SemiBold) }
+            }) { Text(str.allow, color = Ui.Ink, fontWeight = FontWeight.SemiBold) }
         },
         dismissButton = {
-            TextButton(onClick = { askFullScreen = false; Prefs(ctx).setFsiAsked() }) { Text("Not now", color = Ui.Muted) }
+            TextButton(onClick = { askFullScreen = false; Prefs(ctx).setFsiAsked() }) { Text(str.notNow, color = Ui.Muted) }
         },
     )
 }
@@ -331,6 +361,7 @@ private fun MiniPlayer(
     onOpen: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val str = LocalStrings.current
     val shape = RoundedCornerShape(26.dp)
     Column(
         modifier
@@ -347,7 +378,7 @@ private fun MiniPlayer(
             Column(Modifier.weight(1f)) {
                 Text(song.title, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Spacer(Modifier.height(1.dp))
-                Text(song.artist, color = Color.White.copy(alpha = 0.6f), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(str.artist(song.artist), color = Color.White.copy(alpha = 0.6f), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             Box(
                 Modifier.size(40.dp).bouncyClick(0.88f, onClick = onToggle).clip(CircleShape).background(Color.White),
@@ -359,7 +390,7 @@ private fun MiniPlayer(
                 Modifier.size(40.dp).bouncyClick(0.85f, onClick = onNext).clip(CircleShape),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(Icons.Rounded.SkipNext, "Next", tint = Color.White, modifier = Modifier.size(24.dp))
+                Icon(Icons.Rounded.SkipNext, "Next", tint = Color.White, modifier = Modifier.size(24.dp).mirrorInRtl())
             }
         }
         MiniProgress(song, positionFlow, durationFlow, Modifier.padding(top = 8.dp, start = 4.dp, end = 4.dp))
@@ -382,7 +413,7 @@ private fun MiniProgress(song: Song, positionFlow: StateFlow<Long>, durationFlow
 }
 
 @Composable
-private fun PermissionScreen(denied: Boolean, onClick: () -> Unit) {
+private fun PermissionScreen(denied: Boolean, str: Strings, onClick: () -> Unit) {
     var shown by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { shown = true }
     Column(
@@ -403,13 +434,12 @@ private fun PermissionScreen(denied: Boolean, onClick: () -> Unit) {
                 }
                 Spacer(Modifier.height(32.dp))
                 Text(
-                    "Your music, beautifully played", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Ui.Ink,
-                    textAlign = TextAlign.Center, letterSpacing = (-0.8).sp, lineHeight = 33.sp,
+                    str.permTitle, fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Ui.Ink,
+                    textAlign = TextAlign.Center, letterSpacing = str.ls((-0.8).sp), lineHeight = 33.sp,
                 )
                 Spacer(Modifier.height(12.dp))
                 Text(
-                    if (denied) "Access was denied. Open settings and allow audio access to see your songs."
-                    else "Allow access to the audio files on your device. Videos are never shown.",
+                    if (denied) str.permDenied else str.permAsk,
                     fontSize = 15.sp, color = Ui.Muted, textAlign = TextAlign.Center, lineHeight = 21.sp,
                 )
                 Spacer(Modifier.height(36.dp))
@@ -422,7 +452,7 @@ private fun PermissionScreen(denied: Boolean, onClick: () -> Unit) {
                         .background(Ui.Ink),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text(if (denied) "Open settings" else "Allow access", color = Ui.Bg, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                    Text(if (denied) str.openSettings else str.allowAccess, color = Ui.Bg, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
         }
