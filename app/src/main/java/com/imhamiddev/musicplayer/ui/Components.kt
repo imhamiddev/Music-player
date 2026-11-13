@@ -223,7 +223,7 @@ fun SegmentedTabs(
     val shape = RoundedCornerShape(50)
     BoxWithConstraints(
         modifier
-            .height(50.dp)
+            .height(42.dp)
             .clip(shape)
             .background(Ui.TileDeep.copy(alpha = 0.7f))
             .padding(4.dp),
@@ -246,7 +246,7 @@ fun SegmentedTabs(
                     Modifier.weight(1f).fillMaxHeight().bouncyClick(0.94f) { onSelect(i) },
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text(label, color = color, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                    Text(label, color = color, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
                 }
             }
         }
@@ -263,24 +263,24 @@ fun SearchPill(query: String, onQuery: (String) -> Unit, resultCount: Int, modif
     Row(
         modifier
             .fillMaxWidth()
-            .height(56.dp)
-            .shadow(10.dp, shape, ambientColor = Color.Black.copy(0.05f), spotColor = Color.Black.copy(0.09f))
+            .height(42.dp)
+            .shadow(6.dp, shape, ambientColor = Color.Black.copy(0.04f), spotColor = Color.Black.copy(0.07f))
             .clip(shape)
             .background(Ui.Card)
-            .padding(start = 18.dp, end = 8.dp),
+            .padding(start = 14.dp, end = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(Icons.Rounded.Search, null, tint = Ui.Muted, modifier = Modifier.size(22.dp))
-        Spacer(Modifier.width(10.dp))
+        Icon(Icons.Rounded.Search, null, tint = Ui.Muted, modifier = Modifier.size(19.dp))
+        Spacer(Modifier.width(8.dp))
         Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
             if (query.isEmpty()) {
-                Text(s.searchHint, color = Ui.Muted, fontSize = 15.sp, maxLines = 1)
+                Text(s.searchHint, color = Ui.Muted, fontSize = 13.5.sp, maxLines = 1)
             }
             BasicTextField(
                 value = query,
                 onValueChange = onQuery,
                 singleLine = true,
-                textStyle = TextStyle(color = Ui.Ink, fontSize = 16.sp),
+                textStyle = TextStyle(color = Ui.Ink, fontSize = 14.5.sp),
                 cursorBrush = SolidColor(Ui.GreenA),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                 keyboardActions = KeyboardActions(onSearch = { focus.clearFocus() }),
@@ -297,7 +297,7 @@ fun SearchPill(query: String, onQuery: (String) -> Unit, resultCount: Int, modif
                     Modifier
                         .clip(RoundedCornerShape(50))
                         .background(Ui.GreenBrush)
-                        .padding(horizontal = 14.dp, vertical = 8.dp),
+                        .padding(horizontal = 11.dp, vertical = 5.dp),
                 ) {
                     AnimatedContent(
                         targetState = resultCount,
@@ -308,12 +308,12 @@ fun SearchPill(query: String, onQuery: (String) -> Unit, resultCount: Int, modif
                     ) { n ->
                         Text(
                             s.results(n),
-                            color = Ui.OnAccent, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+                            color = Ui.OnAccent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
                         )
                     }
                 }
-                Spacer(Modifier.width(6.dp))
-                IconCircle(Icons.Rounded.Close, { onQuery("") }, size = 34.dp, iconSize = 18.dp, description = "Clear")
+                Spacer(Modifier.width(4.dp))
+                IconCircle(Icons.Rounded.Close, { onQuery("") }, size = 28.dp, iconSize = 16.dp, description = "Clear")
             }
         }
     }
