@@ -38,19 +38,21 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AccessTime
 import androidx.compose.material.icons.rounded.ArrowUpward
+import androidx.compose.material.icons.rounded.BarChart
 import androidx.compose.material.icons.rounded.ChevronLeft
 import androidx.compose.material.icons.rounded.ChevronRight
-import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.LibraryMusic
-import androidx.compose.material.icons.rounded.LightMode
+import androidx.compose.material.icons.rounded.MyLocation
+import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Sort
 import androidx.compose.material.icons.rounded.SortByAlpha
 import androidx.compose.material3.DropdownMenu
@@ -69,9 +71,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -84,8 +88,6 @@ import com.imhamiddev.musicplayer.data.Song
 import com.imhamiddev.musicplayer.data.SortField
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-
-private fun plural(n: Int, word: String) = "$n $word" + if (n == 1) "" else "s"
 
 private class EmptyInfo(val icon: ImageVector, val title: String, val body: String)
 
@@ -103,13 +105,14 @@ fun LibraryScreen(
     bottomInset: Dp,
     onQuery: (String) -> Unit,
     onSort: (SortField) -> Unit,
-    dark: Boolean,
-    onToggleTheme: () -> Unit,
+    onOpenStats: () -> Unit,
+    onOpenSettings: () -> Unit,
     actions: SongActions,
     onPlay: (Song, List<Song>) -> Unit,
     onOpenPlayer: () -> Unit,
     topInset: Dp = 0.dp,
 ) {
+    val s = LocalStrings.current
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var openFolder by rememberSaveable { mutableStateOf<String?>(null) }
     var sortOpen by remember { mutableStateOf(false) }
@@ -156,10 +159,10 @@ fun LibraryScreen(
     BackHandler(enabled = tab == 1 && openFolder != null) { openFolder = null }
 
     val subtitle = when (tab) {
-        0 -> plural(sorted.size, "song")
-        1 -> if (openFolder == null) plural(folders.size, "folder") else plural(openGroup?.songs?.size ?: 0, "song")
-        2 -> plural(favs.size, "favorite")
-        else -> plural(recentList.size, "song")
+        0 -> s.songs(sorted.size)
+        1 -> if (openFolder == null) s.folders(folders.size) else s.songs(openGroup?.songs?.size ?: 0)
+        2 -> s.favorites(favs.size)
+        else -> s.songs(recentList.size)
     }
     val resultCount = when (tab) {
         0 -> sorted.size
@@ -175,7 +178,7 @@ fun LibraryScreen(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(Modifier.weight(1f)) {
-                Text("Library", fontSize = 34.sp, fontWeight = FontWeight.Bold, color = Ui.Ink, letterSpacing = (-1).sp)
+                Text(s.library, fontSize = 34.sp, fontWeight = FontWeight.Bold, color = Ui.Ink, letterSpacing = s.ls((-1).sp))
                 AnimatedContent(
                     targetState = subtitle,
                     transitionSpec = {
@@ -185,10 +188,9 @@ fun LibraryScreen(
                     label = "subtitle",
                 ) { s -> Text(s, fontSize = 14.sp, color = Ui.Muted) }
             }
-            IconCircle(
-                if (dark) Icons.Rounded.LightMode else Icons.Rounded.DarkMode,
-                onToggleTheme, size = 48.dp, description = "Theme",
-            )
+            IconCircle(Icons.Rounded.BarChart, onOpenStats, size = 48.dp, description = s.statsTitle)
+            Spacer(Modifier.width(10.dp))
+            IconCircle(Icons.Rounded.Settings, onOpenSettings, size = 48.dp, description = s.settings)
             Spacer(Modifier.width(10.dp))
             AnimatedVisibility(
                 visible = tab != 3,
@@ -210,7 +212,7 @@ fun LibraryScreen(
 
         SearchPill(query, onQuery, resultCount, Modifier.padding(start = 20.dp, end = 20.dp, top = 16.dp))
         SegmentedTabs(
-            labels = listOf("All", "Folders", "Favorite", "Recent"),
+            labels = listOf(s.tabAll, s.tabFolders, s.tabFavorite, s.tabRecent),
             selected = tab,
             onSelect = { tab = it },
             modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 6.dp),
@@ -232,7 +234,7 @@ fun LibraryScreen(
                     when (t) {
                         0 -> SongList(
                             sorted, favorites, currentId, isPlaying, bottomInset,
-                            if (q.isNotEmpty()) noResults(q) else EmptyInfo(Icons.Rounded.LibraryMusic, "No music found", "Add some audio files to your device and they will show up here."),
+                            if (q.isNotEmpty()) noResults(q, s) else EmptyInfo(Icons.Rounded.LibraryMusic, s.emptyMusicTitle, s.emptyMusicBody),
                             actions, onPlay, onOpenPlayer,
                         )
                         1 -> AnimatedContent(
@@ -251,7 +253,7 @@ fun LibraryScreen(
                             if (path == null) {
                                 FolderList(
                                     folders, bottomInset,
-                                    if (q.isNotEmpty()) noResults(q) else EmptyInfo(Icons.Rounded.Folder, "No folders", "Folders that contain music will appear here."),
+                                    if (q.isNotEmpty()) noResults(q, s) else EmptyInfo(Icons.Rounded.Folder, s.emptyFoldersTitle, s.emptyFoldersBody),
                                 ) { openFolder = it.path }
                             } else {
                                 Column(Modifier.fillMaxSize()) {
@@ -259,17 +261,17 @@ fun LibraryScreen(
                                         Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 6.dp),
                                         verticalAlignment = Alignment.CenterVertically,
                                     ) {
-                                        IconCircle(Icons.Rounded.ChevronLeft, { openFolder = null }, size = 42.dp, description = "Back")
+                                        IconCircle(Icons.Rounded.ChevronLeft, { openFolder = null }, modifier = Modifier.mirrorInRtl(), size = 42.dp, description = "Back")
                                         Spacer(Modifier.width(12.dp))
                                         Column(Modifier.weight(1f)) {
-                                            Text(openGroup?.name ?: "", fontSize = 19.sp, fontWeight = FontWeight.Bold, color = Ui.Ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                            Text(openGroup?.displayPath ?: "", fontSize = 12.sp, color = Ui.Muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                            Text(openGroup?.label(s) ?: "", fontSize = 19.sp, fontWeight = FontWeight.Bold, color = Ui.Ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                            Text(openGroup?.pathLabel(s) ?: "", fontSize = 12.sp, color = Ui.Muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                         }
                                     }
                                     Box(Modifier.weight(1f)) {
                                         SongList(
                                             openGroup?.songs ?: emptyList(), favorites, currentId, isPlaying, bottomInset,
-                                            if (q.isNotEmpty()) noResults(q) else EmptyInfo(Icons.Rounded.Folder, "Empty folder", "There is no music in this folder."),
+                                            if (q.isNotEmpty()) noResults(q, s) else EmptyInfo(Icons.Rounded.Folder, s.emptyFolderTitle, s.emptyFolderBody),
                                             actions, onPlay, onOpenPlayer,
                                         )
                                     }
@@ -278,12 +280,12 @@ fun LibraryScreen(
                         }
                         2 -> SongList(
                             favs, favorites, currentId, isPlaying, bottomInset,
-                            if (q.isNotEmpty()) noResults(q) else EmptyInfo(Icons.Rounded.Favorite, "No favorites yet", "Tap the heart on any song to keep it here."),
+                            if (q.isNotEmpty()) noResults(q, s) else EmptyInfo(Icons.Rounded.Favorite, s.emptyFavTitle, s.emptyFavBody),
                             actions, onPlay, onOpenPlayer,
                         )
                         else -> SongList(
                             recentList, favorites, currentId, isPlaying, bottomInset,
-                            if (q.isNotEmpty()) noResults(q) else EmptyInfo(Icons.Rounded.History, "Nothing played yet", "Songs you play will show up here."),
+                            if (q.isNotEmpty()) noResults(q, s) else EmptyInfo(Icons.Rounded.History, s.emptyRecentTitle, s.emptyRecentBody),
                             actions, onPlay, onOpenPlayer,
                         )
                     }
@@ -293,8 +295,12 @@ fun LibraryScreen(
     }
 }
 
-private fun noResults(q: String) =
-    EmptyInfo(Icons.Rounded.Sort, "No results", "Nothing matches \u201C$q\u201D. Try a different title or artist.")
+private fun noResults(q: String, s: Strings) =
+    EmptyInfo(Icons.Rounded.Sort, s.noResultsTitle, s.noResultsBody(q))
+
+private fun FolderGroup.label(s: Strings): String = if (path.isEmpty()) s.storage else name
+
+private fun FolderGroup.pathLabel(s: Strings): String = displayPath.ifEmpty { s.internalStorage }
 
 // ---- Sort menu -----------------------------------------------------------------------------
 
@@ -306,6 +312,7 @@ private fun SortMenu(
     asc: Boolean,
     onSort: (SortField) -> Unit,
 ) {
+    val s = LocalStrings.current
     val scope = rememberCoroutineScope()
     SoftMenu(
         expanded = expanded,
@@ -315,13 +322,13 @@ private fun SortMenu(
     ) {
         Column(Modifier.width(250.dp).padding(8.dp)) {
             Text(
-                "Sort by", fontSize = 12.sp, color = Ui.Muted, fontWeight = FontWeight.Medium,
+                s.sortBy, fontSize = 12.sp, color = Ui.Muted, fontWeight = FontWeight.Medium,
                 modifier = Modifier.padding(start = 12.dp, top = 6.dp, bottom = 8.dp),
             )
             SortOption(
                 icon = Icons.Rounded.SortByAlpha,
-                label = "Alphabetical",
-                detail = if (field == SortField.Alphabet && !asc) "Z to A" else "A to Z",
+                label = s.sortAlpha,
+                detail = if (field == SortField.Alphabet && !asc) s.sortZA else s.sortAZ,
                 selected = field == SortField.Alphabet,
                 asc = asc,
             ) {
@@ -331,8 +338,8 @@ private fun SortMenu(
             Spacer(Modifier.height(4.dp))
             SortOption(
                 icon = Icons.Rounded.AccessTime,
-                label = "Date added",
-                detail = if (field == SortField.DateAdded && asc) "Oldest first" else "Newest first",
+                label = s.sortDate,
+                detail = if (field == SortField.DateAdded && asc) s.sortOldest else s.sortNewest,
                 selected = field == SortField.DateAdded,
                 asc = asc,
             ) {
@@ -398,23 +405,62 @@ private fun SongList(
         EmptyState(empty, Modifier.padding(bottom = bottomInset))
         return
     }
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 30.dp, end = 30.dp, top = 8.dp, bottom = bottomInset),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        itemsIndexed(items, key = { _, s -> s.id }) { index, song ->
-            val isCurrent = song.id == currentId
-            SongRow(
-                song = song,
-                index = index,
-                isCurrent = isCurrent,
-                isPlaying = isPlaying,
-                isFav = song.id in favorites,
-                onClick = { if (isCurrent) onOpenPlayer() else onPlay(song, items) },
-                actions = actions,
-                modifier = Modifier.animateItem(fadeInSpec = Motion.soft(), placementSpec = Motion.soft(), fadeOutSpec = Motion.soft()),
-            )
+    val s = LocalStrings.current
+    val density = LocalDensity.current
+    val scope = rememberCoroutineScope()
+    val listState = rememberLazyListState()
+    // Where the playing song sits in this list (-1 when it is not part of it).
+    val playingIndex = remember(items, currentId) {
+        if (currentId == null) -1 else items.indexOfFirst { it.id == currentId }
+    }
+    Box(Modifier.fillMaxSize()) {
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(start = 30.dp, end = 30.dp, top = 8.dp, bottom = bottomInset),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            itemsIndexed(items, key = { _, item -> item.id }) { index, song ->
+                val isCurrent = song.id == currentId
+                SongRow(
+                    song = song,
+                    index = index,
+                    isCurrent = isCurrent,
+                    isPlaying = isPlaying,
+                    isFav = song.id in favorites,
+                    onClick = { if (isCurrent) onOpenPlayer() else onPlay(song, items) },
+                    actions = actions,
+                    modifier = Modifier.animateItem(fadeInSpec = Motion.soft(), placementSpec = Motion.soft(), fadeOutSpec = Motion.soft()),
+                )
+            }
+        }
+
+        // Small floating button: wherever the list is scrolled, one tap brings the playing song into view.
+        AnimatedVisibility(
+            visible = playingIndex >= 0,
+            modifier = Modifier.align(Alignment.BottomEnd).padding(end = 20.dp, bottom = bottomInset + 4.dp),
+            enter = scaleIn(Motion.soft(), initialScale = 0.5f) + fadeIn(Motion.soft()),
+            exit = scaleOut(Motion.soft(), targetScale = 0.5f) + fadeOut(Motion.soft()),
+        ) {
+            Box(
+                Modifier
+                    .size(48.dp)
+                    .bouncyClick(0.88f) {
+                        scope.launch {
+                            val viewport = listState.layoutInfo.viewportSize.height
+                            val rowPx = with(density) { 64.dp.roundToPx() }
+                            // A negative offset leaves room above, so the song lands near the middle of the screen.
+                            val offset = -((viewport / 2) - (rowPx / 2)).coerceAtLeast(0)
+                            listState.animateScrollToItem(playingIndex.coerceAtLeast(0), offset)
+                        }
+                    }
+                    .shadow(10.dp, CircleShape, ambientColor = Color.Black.copy(0.12f), spotColor = Color.Black.copy(0.3f))
+                    .clip(CircleShape)
+                    .background(Ui.GreenBrush),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(Icons.Rounded.MyLocation, s.locateSong, tint = Ui.OnAccent, modifier = Modifier.size(22.dp))
+            }
         }
     }
 }
@@ -430,6 +476,7 @@ private fun SongRow(
     actions: SongActions,
     modifier: Modifier = Modifier,
 ) {
+    val s = LocalStrings.current
     var shown by remember { mutableStateOf(index >= 12) }
     LaunchedEffect(Unit) {
         if (!shown) {
@@ -458,7 +505,7 @@ private fun SongRow(
             )
             Spacer(Modifier.height(2.dp))
             Text(
-                "${song.artist}  \u00B7  ${fmt(song.durationMs)}", fontSize = 12.5.sp, color = Ui.Muted,
+                "${s.artist(song.artist)}  \u00B7  ${s.time(song.durationMs)}", fontSize = 12.5.sp, color = Ui.Muted,
                 maxLines = 1, overflow = TextOverflow.Ellipsis,
             )
         }
@@ -480,6 +527,7 @@ private fun FolderList(
         EmptyState(empty, Modifier.padding(bottom = bottomInset))
         return
     }
+    val s = LocalStrings.current
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(start = 30.dp, end = 30.dp, top = 8.dp, bottom = bottomInset),
@@ -504,15 +552,15 @@ private fun FolderList(
                 }
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(g.name, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Ui.Ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(g.label(s), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Ui.Ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Spacer(Modifier.height(2.dp))
-                    Text(g.displayPath, fontSize = 12.sp, color = Ui.Muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(g.pathLabel(s), fontSize = 12.sp, color = Ui.Muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 Box(Modifier.clip(RoundedCornerShape(50)).background(Ui.Tile).padding(horizontal = 11.dp, vertical = 5.dp)) {
-                    Text("${g.songs.size}", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Ui.Ink)
+                    Text(s.num(g.songs.size), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Ui.Ink)
                 }
                 Spacer(Modifier.width(2.dp))
-                Icon(Icons.Rounded.ChevronRight, null, tint = Ui.Muted, modifier = Modifier.size(22.dp))
+                Icon(Icons.Rounded.ChevronRight, null, tint = Ui.Muted, modifier = Modifier.size(22.dp).mirrorInRtl())
             }
         }
     }
