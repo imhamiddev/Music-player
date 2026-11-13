@@ -107,6 +107,7 @@ fun MusicApp(vm: MainViewModel) {
     val language by vm.language.collectAsState()
     val progressStyle by vm.progressStyle.collectAsState()
     val stats by vm.stats.collectAsState()
+    val categories by vm.categories.collectAsState()
     val str = LocalStrings.current
 
     var statsOpen by rememberSaveable { mutableStateOf(false) }
@@ -123,6 +124,11 @@ fun MusicApp(vm: MainViewModel) {
     var deleteTarget by remember { mutableStateOf<Song?>(null) }
     var pendingDelete by remember { mutableStateOf<Song?>(null) }
     var askFullScreen by remember { mutableStateOf(false) }
+    // Category dialogs. nameDialog: null = closed; id 0 = create (optionally with a first song), else rename that id.
+    var pickerTarget by remember { mutableStateOf<Song?>(null) }
+    var nameDialog by remember { mutableStateOf<Pair<Long, String>?>(null) }
+    var deleteCatId by remember { mutableStateOf<Long?>(null) }
+    var addSongsCatId by remember { mutableStateOf<Long?>(null) }
 
     val deleteLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { res ->
         val song = pendingDelete
@@ -182,11 +188,21 @@ fun MusicApp(vm: MainViewModel) {
     val actions = remember(vm) {
         SongActions(
             onToggleFav = { vm.toggleFavorite(it.id) },
+            onAddToCategory = { pickerTarget = it },
             onPlayNext = { vm.playNext(it) },
             onRename = { renameTarget = it },
             onShare = { shareSong(ctx, it) },
             onDetails = { detailsTarget = it },
             onDelete = { if (Build.VERSION.SDK_INT >= 30) startDelete(it) else deleteTarget = it },
+        )
+    }
+
+    val catActions = remember {
+        CategoryActions(
+            onNew = { nameDialog = 0L to "" },
+            onRename = { nameDialog = it.id to it.name },
+            onDelete = { deleteCatId = it.id },
+            onAddSongs = { addSongsCatId = it.id },
         )
     }
 
@@ -210,6 +226,7 @@ fun MusicApp(vm: MainViewModel) {
             loaded = loaded,
             favorites = favorites,
             recents = recents,
+            categories = categories,
             query = query,
             sortField = sortField,
             sortAsc = sortAsc,
@@ -221,6 +238,7 @@ fun MusicApp(vm: MainViewModel) {
             onOpenStats = { statsOpen = true },
             onOpenSettings = { settingsOpen = true },
             actions = actions,
+            catActions = catActions,
             onPlay = vm::play,
             onOpenPlayer = { playerOpen = true },
             topInset = bannerPush,
@@ -316,6 +334,48 @@ fun MusicApp(vm: MainViewModel) {
             vm.renameSong(t, name)
             renameTarget = null
         }
+    }
+    val picker = rememberHeld(pickerTarget)
+    picker?.let { song ->
+        CategoryPickerDialog(
+            song = song,
+            categories = categories,
+            visible = pickerTarget != null,
+            onToggle = { c -> vm.toggleSongInCategory(c.id, song.id) },
+            onCreate = { name -> vm.createCategory(name, song.id) },
+            onDismiss = { pickerTarget = null },
+        )
+    }
+    val nd = rememberHeld(nameDialog)
+    nd?.let { (id, initial) ->
+        CategoryNameDialog(
+            title = if (id == 0L) str.newCategory else str.renameCategory,
+            initial = initial,
+            confirmLabel = if (id == 0L) str.create else str.save,
+            visible = nameDialog != null,
+            onDismiss = { nameDialog = null },
+            onConfirm = { name ->
+                if (id == 0L) vm.createCategory(name) else vm.renameCategory(id, name)
+                nameDialog = null
+            },
+        )
+    }
+    val delCat = rememberHeld(categories.firstOrNull { it.id == deleteCatId })
+    delCat?.let { c ->
+        DeleteCategoryDialog(c, visible = deleteCatId != null, onDismiss = { deleteCatId = null }) {
+            vm.deleteCategory(c.id)
+            deleteCatId = null
+        }
+    }
+    val addCat = rememberHeld(categories.firstOrNull { it.id == addSongsCatId })
+    addCat?.let { c ->
+        AddSongsDialog(
+            category = categories.firstOrNull { it.id == c.id } ?: c,
+            songs = songs,
+            visible = addSongsCatId != null,
+            onToggle = { song -> vm.toggleSongInCategory(c.id, song.id) },
+            onDismiss = { addSongsCatId = null },
+        )
     }
     val dt = rememberHeld(detailsTarget)
     dt?.let { t -> DetailsDialog(t, visible = detailsTarget != null) { detailsTarget = null } }

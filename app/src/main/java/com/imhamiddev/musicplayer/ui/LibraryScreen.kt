@@ -22,6 +22,7 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -36,6 +37,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -43,10 +45,13 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AccessTime
+import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.ArrowUpward
 import androidx.compose.material.icons.rounded.BarChart
 import androidx.compose.material.icons.rounded.ChevronLeft
 import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.History
@@ -83,13 +88,17 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.imhamiddev.musicplayer.data.Category
 import com.imhamiddev.musicplayer.data.FolderGroup
 import com.imhamiddev.musicplayer.data.Song
 import com.imhamiddev.musicplayer.data.SortField
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.math.abs
+import kotlin.math.sqrt
 
-private class EmptyInfo(val icon: ImageVector, val title: String, val body: String)
+internal class EmptyInfo(val icon: ImageVector, val title: String, val body: String)
 
 @Composable
 fun LibraryScreen(
@@ -97,6 +106,7 @@ fun LibraryScreen(
     loaded: Boolean,
     favorites: Set<Long>,
     recents: List<Long>,
+    categories: List<Category>,
     query: String,
     sortField: SortField,
     sortAsc: Boolean,
@@ -108,6 +118,7 @@ fun LibraryScreen(
     onOpenStats: () -> Unit,
     onOpenSettings: () -> Unit,
     actions: SongActions,
+    catActions: CategoryActions,
     onPlay: (Song, List<Song>) -> Unit,
     onOpenPlayer: () -> Unit,
     topInset: Dp = 0.dp,
@@ -115,6 +126,7 @@ fun LibraryScreen(
     val s = LocalStrings.current
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var openFolder by rememberSaveable { mutableStateOf<String?>(null) }
+    var openCategory by rememberSaveable { mutableStateOf<Long?>(null) }
     var sortOpen by remember { mutableStateOf(false) }
 
     val q = query.trim()
@@ -155,30 +167,41 @@ fun LibraryScreen(
         }
     }
     val openGroup = folders.firstOrNull { it.path == openFolder }
+    val songIds = remember(songs) { songs.mapTo(HashSet()) { it.id } }
+    val openCat = categories.firstOrNull { it.id == openCategory }
+    val catSongs = remember(sorted, openCat) {
+        val ids = openCat?.songIds?.toSet() ?: emptySet()
+        sorted.filter { it.id in ids }
+    }
+    // A category that was deleted while open: go back to the list.
+    LaunchedEffect(openCat?.id, openCategory) { if (openCat == null && openCategory != null) openCategory = null }
 
     BackHandler(enabled = tab == 1 && openFolder != null) { openFolder = null }
+    BackHandler(enabled = tab == 4 && openCategory != null) { openCategory = null }
 
     val subtitle = when (tab) {
         0 -> s.songs(sorted.size)
         1 -> if (openFolder == null) s.folders(folders.size) else s.songs(openGroup?.songs?.size ?: 0)
         2 -> s.favorites(favs.size)
-        else -> s.songs(recentList.size)
+        3 -> s.songs(recentList.size)
+        else -> if (openCategory == null) s.categoriesCount(categories.size) else s.songs(catSongs.size)
     }
     val resultCount = when (tab) {
         0 -> sorted.size
         1 -> if (openFolder == null) folders.size else openGroup?.songs?.size ?: 0
         2 -> favs.size
-        else -> recentList.size
+        3 -> recentList.size
+        else -> if (openCategory == null) categories.size else catSongs.size
     }
 
     Column(Modifier.fillMaxSize().statusBarsPadding().padding(top = topInset)) {
         // Header
         Row(
-            Modifier.fillMaxWidth().padding(start = 24.dp, end = 20.dp, top = 14.dp),
+            Modifier.fillMaxWidth().padding(start = 24.dp, end = 16.dp, top = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(Modifier.weight(1f)) {
-                Text(s.library, fontSize = 34.sp, fontWeight = FontWeight.Bold, color = Ui.Ink, letterSpacing = s.ls((-1).sp))
+                Text(s.library, fontSize = 26.sp, fontWeight = FontWeight.Bold, color = Ui.Ink, letterSpacing = s.ls((-0.6).sp))
                 AnimatedContent(
                     targetState = subtitle,
                     transitionSpec = {
@@ -186,19 +209,19 @@ fun LibraryScreen(
                             (slideOutVertically(Motion.soft()) { -it / 2 } + fadeOut(tween(260, easing = Motion.Silk)))
                     },
                     label = "subtitle",
-                ) { s -> Text(s, fontSize = 14.sp, color = Ui.Muted) }
+                ) { s -> Text(s, fontSize = 12.sp, color = Ui.Muted) }
             }
-            IconCircle(Icons.Rounded.BarChart, onOpenStats, size = 48.dp, description = s.statsTitle)
-            Spacer(Modifier.width(10.dp))
-            IconCircle(Icons.Rounded.Settings, onOpenSettings, size = 48.dp, description = s.settings)
-            Spacer(Modifier.width(10.dp))
+            IconCircle(Icons.Rounded.BarChart, onOpenStats, size = 38.dp, iconSize = 19.dp, description = s.statsTitle)
+            Spacer(Modifier.width(8.dp))
+            IconCircle(Icons.Rounded.Settings, onOpenSettings, size = 38.dp, iconSize = 19.dp, description = s.settings)
+            Spacer(Modifier.width(8.dp))
             AnimatedVisibility(
                 visible = tab != 3,
                 enter = scaleIn(animationSpec = Motion.soft()) + fadeIn(Motion.soft()),
                 exit = scaleOut(Motion.soft()) + fadeOut(Motion.soft()),
             ) {
                 Box {
-                    IconCircle(Icons.Rounded.Sort, { sortOpen = true }, size = 48.dp, description = "Sort")
+                    IconCircle(Icons.Rounded.Sort, { sortOpen = true }, size = 38.dp, iconSize = 19.dp, description = "Sort")
                     SortMenu(
                         expanded = sortOpen,
                         onDismiss = { sortOpen = false },
@@ -210,12 +233,12 @@ fun LibraryScreen(
             }
         }
 
-        SearchPill(query, onQuery, resultCount, Modifier.padding(start = 20.dp, end = 20.dp, top = 16.dp))
+        SearchPill(query, onQuery, resultCount, Modifier.padding(start = 20.dp, end = 20.dp, top = 10.dp))
         SegmentedTabs(
-            labels = listOf(s.tabAll, s.tabFolders, s.tabFavorite, s.tabRecent),
+            labels = listOf(s.tabAll, s.tabFolders, s.tabFavorite, s.tabRecent, s.tabCategories),
             selected = tab,
             onSelect = { tab = it },
-            modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 6.dp),
+            modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 10.dp, bottom = 4.dp),
         )
 
         Box(Modifier.weight(1f).fillMaxWidth()) {
@@ -283,11 +306,59 @@ fun LibraryScreen(
                             if (q.isNotEmpty()) noResults(q, s) else EmptyInfo(Icons.Rounded.Favorite, s.emptyFavTitle, s.emptyFavBody),
                             actions, onPlay, onOpenPlayer,
                         )
-                        else -> SongList(
+                        3 -> SongList(
                             recentList, favorites, currentId, isPlaying, bottomInset,
                             if (q.isNotEmpty()) noResults(q, s) else EmptyInfo(Icons.Rounded.History, s.emptyRecentTitle, s.emptyRecentBody),
                             actions, onPlay, onOpenPlayer,
                         )
+                        else -> AnimatedContent(
+                            targetState = openCategory,
+                            transitionSpec = {
+                                if (targetState != null) {
+                                    (slideInHorizontally(tween(416, easing = Motion.Silk)) { it / 3 } + fadeIn(tween(312, easing = Motion.Silk))) togetherWith
+                                        (slideOutHorizontally(tween(338, easing = Motion.Silk)) { -it / 5 } + fadeOut(tween(260, easing = Motion.Silk)))
+                                } else {
+                                    (slideInHorizontally(tween(416, easing = Motion.Silk)) { -it / 5 } + fadeIn(tween(312, easing = Motion.Silk))) togetherWith
+                                        (slideOutHorizontally(tween(338, easing = Motion.Silk)) { it / 3 } + fadeOut(tween(260, easing = Motion.Silk)))
+                                }
+                            },
+                            label = "categories",
+                        ) { id ->
+                            if (id == null) {
+                                CategoryList(
+                                    categories = categories,
+                                    songCount = { c -> c.songIds.count { it in songIds } },
+                                    bottomInset = bottomInset,
+                                    onNew = catActions.onNew,
+                                ) { openCategory = it.id }
+                            } else {
+                                Column(Modifier.fillMaxSize()) {
+                                    Row(
+                                        Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 6.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        IconCircle(Icons.Rounded.ChevronLeft, { openCategory = null }, modifier = Modifier.mirrorInRtl(), size = 38.dp, iconSize = 20.dp, description = "Back")
+                                        Spacer(Modifier.width(10.dp))
+                                        Column(Modifier.weight(1f)) {
+                                            Text(openCat?.name ?: "", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Ui.Ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                            Text(s.songs(catSongs.size), fontSize = 12.sp, color = Ui.Muted, maxLines = 1)
+                                        }
+                                        IconCircle(Icons.Rounded.Add, { openCat?.let(catActions.onAddSongs) }, size = 38.dp, iconSize = 19.dp, description = s.addSongs)
+                                        Spacer(Modifier.width(8.dp))
+                                        IconCircle(Icons.Rounded.Edit, { openCat?.let(catActions.onRename) }, size = 38.dp, iconSize = 18.dp, description = s.renameCategory)
+                                        Spacer(Modifier.width(8.dp))
+                                        IconCircle(Icons.Rounded.Delete, { openCat?.let(catActions.onDelete) }, size = 38.dp, iconSize = 18.dp, tint = Ui.Danger, description = s.deleteCategory)
+                                    }
+                                    Box(Modifier.weight(1f)) {
+                                        SongList(
+                                            catSongs, favorites, currentId, isPlaying, bottomInset,
+                                            if (q.isNotEmpty()) noResults(q, s) else EmptyInfo(Icons.Rounded.LibraryMusic, s.emptyCategoryTitle, s.emptyCategoryBody),
+                                            actions, onPlay, onOpenPlayer,
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -409,6 +480,7 @@ private fun SongList(
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
+    val scrollJob = remember { arrayOfNulls<Job>(1) }
     // Where the playing song sits in this list (-1 when it is not part of it).
     val playingIndex = remember(items, currentId) {
         if (currentId == null) -1 else items.indexOfFirst { it.id == currentId }
@@ -446,12 +518,13 @@ private fun SongList(
                 Modifier
                     .size(48.dp)
                     .bouncyClick(0.88f) {
-                        scope.launch {
-                            val viewport = listState.layoutInfo.viewportSize.height
-                            val rowPx = with(density) { 64.dp.roundToPx() }
-                            // A negative offset leaves room above, so the song lands near the middle of the screen.
-                            val offset = -((viewport / 2) - (rowPx / 2)).coerceAtLeast(0)
-                            listState.animateScrollToItem(playingIndex.coerceAtLeast(0), offset)
+                        scrollJob[0]?.cancel()
+                        scrollJob[0] = scope.launch {
+                            listState.glideToCenter(
+                                index = playingIndex.coerceAtLeast(0),
+                                itemPx = with(density) { 72.dp.toPx() },
+                                rowPx = with(density) { 64.dp.toPx() },
+                            )
                         }
                     }
                     .shadow(10.dp, CircleShape, ambientColor = Color.Black.copy(0.12f), spotColor = Color.Black.copy(0.3f))
@@ -463,6 +536,26 @@ private fun SongList(
             }
         }
     }
+}
+
+/**
+ * Scrolls so the row at [index] ends up in the middle of the screen, as one long, slow glide
+ * (ease in, ease out) instead of the quick default animation. Rows are all the same height, so the
+ * distance can be worked out up front even when the row is far off screen; a short second glide
+ * then fixes any small difference.
+ */
+private suspend fun LazyListState.glideToCenter(index: Int, itemPx: Float, rowPx: Float) {
+    val first = layoutInfo.visibleItemsInfo.firstOrNull() ?: return
+    val center = (layoutInfo.viewportStartOffset + layoutInfo.viewportEndOffset) / 2f
+    val delta = first.offset + (index - first.index) * itemPx - (center - rowPx / 2f)
+    if (abs(delta) >= 1f) {
+        val rows = abs(delta) / itemPx
+        val ms = (800 + 120 * sqrt(rows.toDouble())).toInt().coerceIn(800, 2000)
+        animateScrollBy(delta, tween(ms, easing = Motion.Glide))
+    }
+    val item = layoutInfo.visibleItemsInfo.firstOrNull { it.index == index } ?: return
+    val fix = item.offset + item.size / 2f - center
+    if (abs(fix) > 2f) animateScrollBy(fix, tween(320, easing = Motion.Silk))
 }
 
 @Composable
@@ -567,7 +660,7 @@ private fun FolderList(
 }
 
 @Composable
-private fun EmptyState(info: EmptyInfo, modifier: Modifier = Modifier) {
+internal fun EmptyState(info: EmptyInfo, modifier: Modifier = Modifier) {
     var shown by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { shown = true }
     val s by animateFloatAsState(if (shown) 1f else 0.7f, Motion.soft(), label = "emptys")

@@ -13,6 +13,9 @@ object Motion {
     /** Gentle ease-in-out: starts softly, glides, lands softly. */
     val Silk = CubicBezierEasing(0.22f, 1f, 0.36f, 1f)
 
+    /** Symmetric ease-in-out for long glides (scrolling to a song): slow start, slow landing. */
+    val Glide = CubicBezierEasing(0.45f, 0f, 0.2f, 1f)
+
     const val Press = 150        // tap feedback
     const val Color = 250        // colour / tint changes
     const val Short = 300        // small elements appearing
