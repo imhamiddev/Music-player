@@ -1,5 +1,20 @@
 package com.imhamiddev.musicplayer.ui
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
+import androidx.compose.material.icons.rounded.Palette
+import androidx.compose.material.icons.rounded.VisibilityOff
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -57,6 +72,9 @@ fun SettingsScreen(
     onClose: () -> Unit,
 ) {
     val s = LocalStrings.current
+    // 0 = main list, 1 = appearance, 2 = hidden folders
+    var page by rememberSaveable { mutableIntStateOf(0) }
+    BackHandler(enabled = page != 0) { page = 0 }
     Column(
         Modifier
             .fillMaxSize()
@@ -65,38 +83,49 @@ fun SettingsScreen(
             .navigationBarsPadding(),
     ) {
         Row(
-            Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, top = 14.dp, bottom = 6.dp),
+            Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, top = 8.dp, bottom = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            IconCircle(Icons.Rounded.ChevronLeft, onClose, modifier = Modifier.mirrorInRtl(), size = 48.dp, description = s.close)
+            IconCircle(Icons.Rounded.ChevronLeft, { if (page != 0) page = 0 else onClose() }, modifier = Modifier.mirrorInRtl(), size = 42.dp, description = s.close)
             Spacer(Modifier.width(14.dp))
-            Text(s.settings, fontSize = 30.sp, fontWeight = FontWeight.Bold, color = Ui.Ink, letterSpacing = s.ls((-0.8).sp))
+            Text(
+                when (page) { 1 -> s.settingsAppearance; 2 -> s.hiddenFoldersTitle; else -> s.settings },
+                fontSize = 26.sp, fontWeight = FontWeight.Bold, color = Ui.Ink, letterSpacing = s.ls((-0.7).sp),
+            )
         }
 
-        Column(
-            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(26.dp),
-        ) {
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .bouncyClick(0.97f, onClick = onOpenSound)
-                    .clip(RoundedCornerShape(24.dp))
-                    .background(Ui.GreenTint)
-                    .padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically,
+        AnimatedContent(
+            targetState = page,
+            transitionSpec = {
+                if (targetState > initialState) {
+                    (slideInHorizontally(tween(380, easing = Motion.Silk)) { it / 4 } + fadeIn(tween(300, easing = Motion.Silk))) togetherWith
+                        (slideOutHorizontally(tween(320, easing = Motion.Silk)) { -it / 6 } + fadeOut(tween(220, easing = Motion.Silk)))
+                } else {
+                    (slideInHorizontally(tween(380, easing = Motion.Silk)) { -it / 6 } + fadeIn(tween(300, easing = Motion.Silk))) togetherWith
+                        (slideOutHorizontally(tween(320, easing = Motion.Silk)) { it / 4 } + fadeOut(tween(220, easing = Motion.Silk)))
+                }
+            },
+            label = "settingsPage",
+        ) { p ->
+            Column(
+                Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(if (p == 0) 12.dp else 26.dp),
             ) {
-                Box(Modifier.size(44.dp).clip(CircleShape).background(Ui.GreenBrush), contentAlignment = Alignment.Center) {
-                    Icon(Icons.Rounded.Tune, null, tint = Ui.OnAccent, modifier = Modifier.size(22.dp))
-                }
-                Spacer(Modifier.width(14.dp))
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text(s.soundTitle, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Ui.Ink)
-                    Text(s.soundEntryHint, fontSize = 12.5.sp, color = Ui.Muted, lineHeight = 17.sp)
-                }
-                Icon(Icons.Rounded.ChevronRight, null, tint = Ui.Muted, modifier = Modifier.size(22.dp).mirrorInRtl())
-            }
-
+                when (p) {
+                    0 -> {
+                        GroupLabel(s.groupPlayback)
+                        SettingsRow(Icons.Rounded.Tune, s.soundTitle, s.soundEntryHint, onOpenSound)
+                        Spacer(Modifier.height(6.dp))
+                        GroupLabel(s.groupApp)
+                        SettingsRow(Icons.Rounded.Palette, s.settingsAppearance, s.settingsAppearanceHint) { page = 1 }
+                        Spacer(Modifier.height(6.dp))
+                        GroupLabel(s.groupLibrary)
+                        SettingsRow(
+                            Icons.Rounded.VisibilityOff, s.hiddenFoldersTitle,
+                            if (hiddenFolders.isEmpty()) s.noHiddenFolders else s.hiddenCount(hiddenFolders.size),
+                        ) { page = 2 }
+                    }
+                    1 -> {
             Section(s.settingsLanguage, s.settingsLanguageHint) {
                 // Each language is written in its own script, whatever language the app is in.
                 SegmentedTabs(
@@ -136,6 +165,8 @@ fun SettingsScreen(
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
+                    }
+                    else -> {
             Section(s.hiddenFoldersTitle, s.hiddenFoldersHint) {
                 if (hiddenFolders.isEmpty()) {
                     Text(s.noHiddenFolders, fontSize = 13.sp, color = Ui.Muted)
@@ -162,8 +193,39 @@ fun SettingsScreen(
                     }
                 }
             }
-            Spacer(Modifier.height(24.dp))
+                    }
+                }
+                Spacer(Modifier.height(24.dp))
+            }
         }
+    }
+}
+
+@Composable
+private fun GroupLabel(text: String) {
+    Text(text, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = Ui.Muted, modifier = Modifier.padding(start = 6.dp, top = 4.dp))
+}
+
+@Composable
+private fun SettingsRow(icon: ImageVector, title: String, subtitle: String, onClick: () -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .bouncyClick(0.97f, onClick = onClick)
+            .clip(RoundedCornerShape(24.dp))
+            .background(Ui.Card)
+            .padding(14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.size(44.dp).clip(CircleShape).background(Ui.Tile), contentAlignment = Alignment.Center) {
+            Icon(icon, null, tint = Ui.Ink, modifier = Modifier.size(22.dp))
+        }
+        Spacer(Modifier.width(14.dp))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(title, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Ui.Ink)
+            Text(subtitle, fontSize = 12.5.sp, color = Ui.Muted, lineHeight = 17.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        }
+        Icon(Icons.Rounded.ChevronRight, null, tint = Ui.Muted, modifier = Modifier.size(22.dp).mirrorInRtl())
     }
 }
 

@@ -146,9 +146,10 @@ class Strings(val rtl: Boolean) {
     val close get() = t("Close", "بستن")
 
     val renameNote get() = t(
-        "Changes the title shown in this app. The file on your device is not modified.",
-        "عنوان نمایش‌داده‌شده در این برنامه تغییر می‌کند. فایل روی دستگاه شما تغییری نمی‌کند.",
+        "The song's file on your device is renamed too.",
+        "نام فایل آهنگ روی دستگاه شما هم تغییر می‌کند.",
     )
+    val renameFailed get() = t("Couldn't rename the file.", "تغییر نام فایل انجام نشد.")
 
     val detailTitle get() = t("Title", "عنوان")
     val detailArtist get() = t("Artist", "خواننده")
@@ -217,6 +218,13 @@ class Strings(val rtl: Boolean) {
     val themeSystem get() = t("System", "سیستم")
     val themeLight get() = t("Light", "روشن")
     val themeDark get() = t("Dark", "تاریک")
+
+    val groupPlayback get() = t("Playback", "پخش")
+    val groupApp get() = t("App", "برنامه")
+    val groupLibrary get() = t("Library", "کتابخانه")
+    val settingsAppearance get() = t("Appearance", "ظاهر")
+    val settingsAppearanceHint get() = t("Language, song progress look and theme.", "زبان، ظاهر نوار آهنگ و پوسته.")
+    fun hiddenCount(n: Int) = t(if (n == 1) "1 folder hidden" else "$n folders hidden", "${num(n)} پوشه پنهان")
 
     // ---- Hidden folders ------------------------------------------------------------------------
 

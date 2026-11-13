@@ -654,17 +654,31 @@ private fun SongList(
  * then fixes any small difference.
  */
 private suspend fun LazyListState.glideToCenter(index: Int, itemPx: Float, rowPx: Float) {
-    val first = layoutInfo.visibleItemsInfo.firstOrNull() ?: return
-    val center = (layoutInfo.viewportStartOffset + layoutInfo.viewportEndOffset) / 2f
-    val delta = first.offset + (index - first.index) * itemPx - (center - rowPx / 2f)
-    if (abs(delta) >= 1f) {
-        val rows = abs(delta) / itemPx
-        val ms = (800 + 120 * sqrt(rows.toDouble())).toInt().coerceIn(800, 2000)
-        animateScrollBy(delta, tween(ms, easing = Motion.Glide))
+    // The first pass covers the long distance in one slow glide using the (uniform) row height to
+    // work out where the row is. If that estimate was a little off, the next passes finish the
+    // job, so one tap is always enough.
+    repeat(4) { pass ->
+        val visible = layoutInfo.visibleItemsInfo
+        val first = visible.firstOrNull() ?: return
+        val center = (layoutInfo.viewportStartOffset + layoutInfo.viewportEndOffset) / 2f
+        val item = visible.firstOrNull { it.index == index }
+        val delta = if (item != null) {
+            item.offset + item.size / 2f - center
+        } else {
+            first.offset + (index - first.index) * itemPx + rowPx / 2f - center
+        }
+        if (abs(delta) < 2f) return
+        val ms = if (item != null && pass > 0) {
+            320
+        } else {
+            val rows = abs(delta) / itemPx
+            (800 + 120 * sqrt(rows.toDouble())).toInt().coerceIn(800, 2000)
+        }
+        val easing = if (item != null && pass > 0) Motion.Silk else Motion.Glide
+        val consumed = animateScrollBy(delta, tween(ms, easing = easing))
+        // Hit the start or end of the list: the row cannot be centred any further.
+        if (abs(consumed) < 1f) return
     }
-    val item = layoutInfo.visibleItemsInfo.firstOrNull { it.index == index } ?: return
-    val fix = item.offset + item.size / 2f - center
-    if (abs(fix) > 2f) animateScrollBy(fix, tween(320, easing = Motion.Silk))
 }
 
 @Composable

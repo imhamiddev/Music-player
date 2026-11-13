@@ -438,9 +438,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     // ---- Playback ----------------------------------------------------------------------------
 
     private fun toMediaItem(song: Song): MediaItem {
-        val art: Uri = ContentUris.withAppendedId(
-            Uri.parse("content://media/external/audio/albumart"), song.albumId,
-        )
+        // The song's own content URI: the notification loader asks the system for its cover (or a placeholder).
+        val art: Uri = song.uri
         return MediaItem.Builder()
             .setMediaId(song.id.toString())
             .setUri(song.uri)

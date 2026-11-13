@@ -194,7 +194,7 @@ private fun SpeedCard() {
     Card(s.speedTitle, s.speedHint) {
         SegmentedTabs(
             labels = speeds.map { s.speedLabel(it) },
-            selected = speeds.indexOfFirst { abs(it - speed) < 0.01f }.coerceAtLeast(1),
+            selected = speeds.indexOfFirst { abs(it - speed) < 0.01f }.let { if (it < 0) 1 else it },
             onSelect = { PlaybackFx.setSpeed(speeds[it]) },
             modifier = Modifier.fillMaxWidth(),
             accent = true,
