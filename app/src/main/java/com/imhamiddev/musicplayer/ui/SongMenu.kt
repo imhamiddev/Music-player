@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Favorite
@@ -57,6 +58,7 @@ import java.util.Date
 /** Everything the three-dot menu on a song row can do. */
 class SongActions(
     val onToggleFav: (Song) -> Unit,
+    val onAddToCategory: (Song) -> Unit,
     val onPlayNext: (Song) -> Unit,
     val onRename: (Song) -> Unit,
     val onShare: (Song) -> Unit,
@@ -84,6 +86,7 @@ fun SongMenuButton(song: Song, isFav: Boolean, actions: SongActions, modifier: M
                     if (isFav) s.removeFav else s.addFav,
                     tint = if (isFav) Ui.Pink else Ui.Ink,
                 ) { open = false; actions.onToggleFav(song) }
+                MenuItem(Icons.Rounded.Add, s.addToCategory) { open = false; actions.onAddToCategory(song) }
                 MenuItem(Icons.Rounded.Edit, s.rename) { open = false; actions.onRename(song) }
                 MenuItem(Icons.Rounded.Share, s.share) { open = false; actions.onShare(song) }
                 MenuItem(Icons.Rounded.Info, s.details) { open = false; actions.onDetails(song) }

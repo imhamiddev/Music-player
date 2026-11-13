@@ -15,6 +15,7 @@ import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.ListenableFuture
 import com.imhamiddev.musicplayer.data.AppLanguage
+import com.imhamiddev.musicplayer.data.Category
 import com.imhamiddev.musicplayer.data.ListenStats
 import com.imhamiddev.musicplayer.data.MusicRepository
 import com.imhamiddev.musicplayer.data.Prefs
@@ -67,6 +68,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _favorites = MutableStateFlow(prefs.favorites())
     val favorites: StateFlow<Set<Long>> = _favorites.asStateFlow()
+
+    private val _categories = MutableStateFlow(prefs.categories())
+    val categories: StateFlow<List<Category>> = _categories.asStateFlow()
 
     private val _recents = MutableStateFlow(prefs.recents())
     val recents: StateFlow<List<Long>> = _recents.asStateFlow()
@@ -333,6 +337,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val rec = _recents.value.filter { it !in ids }
         _recents.value = rec
         prefs.saveRecents(rec)
+        updateCategories { list -> list.map { c -> c.copy(songIds = c.songIds.filter { it !in ids }) } }
         val titles = _titles.value - ids
         _titles.value = titles
         prefs.saveTitles(titles)
@@ -345,6 +350,46 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (!next.add(id)) next.remove(id)
         _favorites.value = next
         prefs.saveFavorites(next)
+    }
+
+    // ---- Categories --------------------------------------------------------------------------
+
+    private fun updateCategories(change: (List<Category>) -> List<Category>) {
+        val next = change(_categories.value)
+        _categories.value = next
+        prefs.saveCategories(next)
+    }
+
+    /** Creates a category and returns its id, or null when the name is blank. */
+    fun createCategory(name: String, firstSongId: Long? = null): Long? {
+        val n = name.trim()
+        if (n.isEmpty()) return null
+        val id = System.currentTimeMillis()
+        updateCategories { it + Category(id, n, listOfNotNull(firstSongId)) }
+        return id
+    }
+
+    fun renameCategory(id: Long, name: String) {
+        val n = name.trim()
+        if (n.isEmpty()) return
+        updateCategories { list -> list.map { if (it.id == id) it.copy(name = n) else it } }
+    }
+
+    fun deleteCategory(id: Long) = updateCategories { list -> list.filter { it.id != id } }
+
+    /** Adds the song when it is not in the category yet, removes it when it is. */
+    fun toggleSongInCategory(categoryId: Long, songId: Long) {
+        updateCategories { list ->
+            list.map { c ->
+                if (c.id != categoryId) c
+                else c.copy(songIds = if (songId in c.songIds) c.songIds - songId else c.songIds + songId)
+            }
+        }
+    }
+
+    /** Replaces the whole song list of a category (used by the multi-select "add songs" dialog). */
+    fun setCategorySongs(categoryId: Long, songIds: List<Long>) {
+        updateCategories { list -> list.map { if (it.id == categoryId) it.copy(songIds = songIds) else it } }
     }
 
     private fun addRecent(id: Long) {

@@ -56,11 +56,13 @@ class Strings(val rtl: Boolean) {
     val tabFolders get() = t("Folders", "پوشه‌ها")
     val tabFavorite get() = t("Favorite", "علاقه‌مندی")
     val tabRecent get() = t("Recent", "اخیر")
+    val tabCategories get() = t("Lists", "دسته‌ها")
     val searchHint get() = t("Search songs, artists, albums", "جستجوی آهنگ، خواننده یا آلبوم")
 
     fun results(n: Int): String = t(if (n == 1) "1 result" else "$n results", "${num(n)} نتیجه")
     fun songs(n: Int): String = t(if (n == 1) "1 song" else "$n songs", "${num(n)} آهنگ")
     fun folders(n: Int): String = t(if (n == 1) "1 folder" else "$n folders", "${num(n)} پوشه")
+    fun categoriesCount(n: Int): String = t(if (n == 1) "1 category" else "$n categories", "${num(n)} دسته")
     fun favorites(n: Int): String = t(if (n == 1) "1 favorite" else "$n favorites", "${num(n)} علاقه‌مندی")
 
     val emptyMusicTitle get() = t("No music found", "موزیکی پیدا نشد")
@@ -106,6 +108,29 @@ class Strings(val rtl: Boolean) {
     // ---- Player --------------------------------------------------------------------------------
 
     val nowPlaying get() = t("NOW PLAYING", "در حال پخش")
+
+    // ---- Categories ----------------------------------------------------------------------------
+
+    val categories get() = t("Categories", "دسته‌بندی‌ها")
+    val newCategory get() = t("New category", "دسته‌بندی جدید")
+    val categoryName get() = t("Category name", "نام دسته‌بندی")
+    val categoryNameHint get() = t("e.g. Gym, Chill", "مثلاً باشگاه، آرامش")
+    val create get() = t("Create", "ساخت")
+    val addToCategory get() = t("Add to category", "افزودن به دسته‌بندی")
+    val addToCategoryNote get() = t("Tap a category to add or remove this song.", "برای افزودن یا حذف این آهنگ، روی یک دسته‌بندی بزنید.")
+    val noCategoriesYet get() = t("No categories yet. Create one below.", "هنوز دسته‌بندی‌ای ندارید. پایین یکی بسازید.")
+    val addSongs get() = t("Add songs", "افزودن آهنگ")
+    val renameCategory get() = t("Rename category", "تغییر نام دسته‌بندی")
+    val deleteCategory get() = t("Delete category", "حذف دسته‌بندی")
+    fun deleteCategoryBody(name: String) = t(
+        "\"$name\" will be deleted. Your songs stay on your device.",
+        "«$name» حذف می‌شود. آهنگ‌های شما روی دستگاه باقی می‌مانند.",
+    )
+    val emptyCategoriesTitle get() = t("No categories", "دسته‌بندی‌ای نیست")
+    val emptyCategoriesBody get() = t("Create one, like Gym or Chill, and put your songs in it.", "یکی بسازید، مثل باشگاه یا آرامش، و آهنگ‌هایتان را داخلش بگذارید.")
+    val emptyCategoryTitle get() = t("This category is empty", "این دسته‌بندی خالی است")
+    val emptyCategoryBody get() = t("Use Add songs, or the ⋮ menu on any song.", "از «افزودن آهنگ» یا منوی ⋮ هر آهنگ استفاده کنید.")
+    val done get() = t("Done", "تمام")
 
     // ---- Song menu and dialogs -----------------------------------------------------------------
 

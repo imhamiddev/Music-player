@@ -1,6 +1,7 @@
 package com.imhamiddev.musicplayer.data
 
 import android.content.Context
+import org.json.JSONArray
 import org.json.JSONObject
 
 class Prefs(context: Context) {
@@ -49,6 +50,30 @@ class Prefs(context: Context) {
 
     fun saveSort(field: SortField, asc: Boolean) {
         sp.edit().putString("sort_field", field.name).putBoolean("sort_asc", asc).apply()
+    }
+
+    // ---- Categories (user-made song groups) ----------------------------------------------------
+
+    fun categories(): List<Category> = runCatching {
+        val arr = JSONArray(sp.getString("categories", "[]") ?: "[]")
+        (0 until arr.length()).map { i ->
+            val o = arr.getJSONObject(i)
+            val ids = o.getJSONArray("songs")
+            Category(o.getLong("id"), o.getString("name"), (0 until ids.length()).map { ids.getLong(it) })
+        }
+    }.getOrDefault(emptyList())
+
+    fun saveCategories(list: List<Category>) {
+        val arr = JSONArray()
+        list.forEach { c ->
+            arr.put(
+                JSONObject()
+                    .put("id", c.id)
+                    .put("name", c.name)
+                    .put("songs", JSONArray(c.songIds)),
+            )
+        }
+        sp.edit().putString("categories", arr.toString()).apply()
     }
 
     // ---- Language and player look --------------------------------------------------------------
