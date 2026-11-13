@@ -32,6 +32,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
@@ -62,8 +63,13 @@ private class BelowAnchor(private val gapPx: Int, private val padPx: Int) : Popu
         layoutDirection: LayoutDirection,
         popupContentSize: IntSize,
     ): IntOffset {
-        val x = (anchorBounds.right - popupContentSize.width + padPx)
-            .coerceIn(0, (windowSize.width - popupContentSize.width).coerceAtLeast(0))
+        // Opens flush with the anchor's trailing edge: right in English, left in Persian.
+        val rawX = if (layoutDirection == LayoutDirection.Rtl) {
+            anchorBounds.left - padPx
+        } else {
+            anchorBounds.right - popupContentSize.width + padPx
+        }
+        val x = rawX.coerceIn(0, (windowSize.width - popupContentSize.width).coerceAtLeast(0))
         var y = anchorBounds.bottom + gapPx - padPx
         if (y + popupContentSize.height > windowSize.height) {
             y = (anchorBounds.top - gapPx - popupContentSize.height + padPx).coerceAtLeast(0)
@@ -85,6 +91,7 @@ fun SoftMenu(
     state.targetState = expanded
     if (!state.currentState && !state.targetState) return
     val pad = 20.dp
+    val originX = if (LocalLayoutDirection.current == LayoutDirection.Rtl) 0f else 1f
     val density = LocalDensity.current
     val provider = remember(density) { BelowAnchor(with(density) { gap.roundToPx() }, with(density) { pad.roundToPx() }) }
     Popup(
@@ -94,8 +101,8 @@ fun SoftMenu(
     ) {
         AnimatedVisibility(
             visibleState = state,
-            enter = fadeIn(Motion.soft(Motion.Short)) + scaleIn(Motion.soft(Motion.Short), initialScale = 0.88f, transformOrigin = TransformOrigin(1f, 0f)),
-            exit = fadeOut(Motion.soft(Motion.Short)) + scaleOut(Motion.soft(Motion.Short), targetScale = 0.9f, transformOrigin = TransformOrigin(1f, 0f)),
+            enter = fadeIn(Motion.soft(Motion.Short)) + scaleIn(Motion.soft(Motion.Short), initialScale = 0.88f, transformOrigin = TransformOrigin(originX, 0f)),
+            exit = fadeOut(Motion.soft(Motion.Short)) + scaleOut(Motion.soft(Motion.Short), targetScale = 0.9f, transformOrigin = TransformOrigin(originX, 0f)),
         ) {
             Column(
                 Modifier

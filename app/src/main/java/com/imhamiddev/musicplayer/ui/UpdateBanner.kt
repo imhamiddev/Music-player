@@ -51,6 +51,7 @@ fun UpdateBanner(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val str = LocalStrings.current
     val held = rememberHeld(state.takeIf { it != UpdateState.None })
     AnimatedVisibility(
         visible = state != UpdateState.None,
@@ -69,19 +70,19 @@ fun UpdateBanner(
                         Spacer(Modifier.width(10.dp))
                         Text(
                             when (s) {
-                                is UpdateState.Available -> "Version ${s.info.version} is available"
-                                is UpdateState.Downloading -> "Downloading… ${(s.progress * 100).toInt()}%"
-                                is UpdateState.Ready -> "Version ${s.info.version} is ready to install"
-                                is UpdateState.Failed -> "Download failed"
+                                is UpdateState.Available -> str.updateAvailable(s.info.version)
+                                is UpdateState.Downloading -> str.updateDownloading((s.progress * 100).toInt())
+                                is UpdateState.Ready -> str.updateReady(s.info.version)
+                                is UpdateState.Failed -> str.updateFailed
                                 else -> ""
                             },
                             color = Ui.OnAccent, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
                             maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
                         )
                         val action: Pair<String, () -> Unit>? = when (s) {
-                            is UpdateState.Available -> "Download" to onDownload
-                            is UpdateState.Ready -> "Install" to onInstall
-                            is UpdateState.Failed -> "Retry" to onDownload
+                            is UpdateState.Available -> str.download to onDownload
+                            is UpdateState.Ready -> str.install to onInstall
+                            is UpdateState.Failed -> str.retry to onDownload
                             else -> null
                         }
                         if (action != null) {

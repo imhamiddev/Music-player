@@ -42,6 +42,7 @@ import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -60,12 +61,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.media3.common.Player
+import com.imhamiddev.musicplayer.data.ProgressStyle
 import com.imhamiddev.musicplayer.data.Song
 import kotlin.math.roundToInt
 import kotlinx.coroutines.flow.StateFlow
@@ -78,6 +82,7 @@ fun PlayerScreen(
     isFav: Boolean,
     shuffle: Boolean,
     repeatMode: Int,
+    progressStyle: ProgressStyle,
     positionFlow: StateFlow<Long>,
     durationFlow: StateFlow<Long>,
     onClose: () -> Unit,
@@ -89,6 +94,7 @@ fun PlayerScreen(
     onRepeat: () -> Unit,
     onFav: () -> Unit,
 ) {
+    val str = LocalStrings.current
     val offsetY = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
     var heightPx by remember { mutableFloatStateOf(1f) }
@@ -134,9 +140,9 @@ fun PlayerScreen(
             ) {
                 IconCircle(Icons.Rounded.KeyboardArrowDown, onClose, size = 44.dp, description = "Close")
                 Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("NOW PLAYING", fontSize = 11.sp, color = Ui.Muted, fontWeight = FontWeight.SemiBold, letterSpacing = 1.6.sp)
+                    Text(str.nowPlaying, fontSize = 11.sp, color = Ui.Muted, fontWeight = FontWeight.SemiBold, letterSpacing = str.ls(1.6.sp))
                     Crossfade(song.album, label = "album") { a ->
-                        Text(a, fontSize = 13.sp, color = Ui.Ink, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(str.album(a), fontSize = 13.sp, color = Ui.Ink, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
                 Spacer(Modifier.width(44.dp))
@@ -171,15 +177,16 @@ fun PlayerScreen(
             ) {
                 Crossfade(song, modifier = Modifier.weight(1f), label = "title") { s ->
                     Column {
-                        Text(s.title, fontSize = 25.sp, fontWeight = FontWeight.Bold, color = Ui.Ink, letterSpacing = (-0.6).sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(s.title, fontSize = 25.sp, fontWeight = FontWeight.Bold, color = Ui.Ink, letterSpacing = str.ls(s.title, (-0.6).sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Spacer(Modifier.height(2.dp))
-                        Text(s.artist, fontSize = 16.sp, color = Ui.Muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(str.artist(s.artist), fontSize = 16.sp, color = Ui.Muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
                 HeartButton(isFav, onFav, size = 48.dp)
             }
 
-            // Dark deck (waveform + controls)
+            // Dark deck (progress + controls). Transport controls stay left-to-right in every language.
+            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
             Column(
                 Modifier
                     .fillMaxWidth()
@@ -188,7 +195,7 @@ fun PlayerScreen(
                     .background(Ui.Deck)
                     .padding(horizontal = 22.dp, vertical = 22.dp),
             ) {
-                ProgressSection(song, isPlaying, positionFlow, durationFlow, onSeek)
+                ProgressSection(song, isPlaying, progressStyle, positionFlow, durationFlow, onSeek)
                 Spacer(Modifier.height(14.dp))
                 Row(
                     Modifier.fillMaxWidth(),
@@ -215,6 +222,7 @@ fun PlayerScreen(
                     )
                 }
             }
+            }
         }
     }
 }
@@ -223,10 +231,12 @@ fun PlayerScreen(
 private fun ProgressSection(
     song: Song,
     playing: Boolean,
+    style: ProgressStyle,
     positionFlow: StateFlow<Long>,
     durationFlow: StateFlow<Long>,
     onSeek: (Float) -> Unit,
 ) {
+    val str = LocalStrings.current
     val pos by positionFlow.collectAsState()
     val liveDur by durationFlow.collectAsState()
     val dur = if (liveDur > 0L) liveDur else song.durationMs
@@ -235,19 +245,21 @@ private fun ProgressSection(
     val shownMs = scrub?.let { (it * dur).toLong() } ?: pos
     Column {
         ScrubBubble(scrub, pos, dur)
-        Waveform(
+        SeekBar(
+            style = style,
             seed = song.id,
             progress = frac,
             playing = playing,
             onSeek = onSeek,
             onScrub = { scrub = it },
-            modifier = Modifier.fillMaxWidth().height(68.dp),
+            waveHeight = 68.dp,
+            modifier = Modifier.fillMaxWidth(),
         )
         Spacer(Modifier.height(8.dp))
         Row(Modifier.fillMaxWidth()) {
-            Text(fmt(shownMs), fontSize = 12.sp, color = Color.White.copy(alpha = 0.6f), fontWeight = FontWeight.Medium)
+            Text(str.time(shownMs), fontSize = 12.sp, color = Color.White.copy(alpha = 0.6f), fontWeight = FontWeight.Medium)
             Spacer(Modifier.weight(1f))
-            Text(fmt(dur), fontSize = 12.sp, color = Color.White.copy(alpha = 0.6f), fontWeight = FontWeight.Medium)
+            Text(str.time(dur), fontSize = 12.sp, color = Color.White.copy(alpha = 0.6f), fontWeight = FontWeight.Medium)
         }
     }
 }

@@ -66,6 +66,7 @@ class SongActions(
 
 @Composable
 fun SongMenuButton(song: Song, isFav: Boolean, actions: SongActions, modifier: Modifier = Modifier) {
+    val s = LocalStrings.current
     var open by remember { mutableStateOf(false) }
     Box(modifier) {
         Box(Modifier.size(40.dp).bouncyClick(0.85f) { open = true }, contentAlignment = Alignment.Center) {
@@ -77,16 +78,16 @@ fun SongMenuButton(song: Song, isFav: Boolean, actions: SongActions, modifier: M
             shape = RoundedCornerShape(22.dp),
         ) {
             Column(Modifier.width(220.dp).padding(6.dp)) {
-                MenuItem(Icons.Rounded.SkipNext, "Play next") { open = false; actions.onPlayNext(song) }
+                MenuItem(Icons.Rounded.SkipNext, s.playNext) { open = false; actions.onPlayNext(song) }
                 MenuItem(
                     if (isFav) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
-                    if (isFav) "Remove from favorites" else "Add to favorites",
+                    if (isFav) s.removeFav else s.addFav,
                     tint = if (isFav) Ui.Pink else Ui.Ink,
                 ) { open = false; actions.onToggleFav(song) }
-                MenuItem(Icons.Rounded.Edit, "Rename") { open = false; actions.onRename(song) }
-                MenuItem(Icons.Rounded.Share, "Share") { open = false; actions.onShare(song) }
-                MenuItem(Icons.Rounded.Info, "Details") { open = false; actions.onDetails(song) }
-                MenuItem(Icons.Rounded.Delete, "Delete", tint = Ui.Danger, textColor = Ui.Danger) { open = false; actions.onDelete(song) }
+                MenuItem(Icons.Rounded.Edit, s.rename) { open = false; actions.onRename(song) }
+                MenuItem(Icons.Rounded.Share, s.share) { open = false; actions.onShare(song) }
+                MenuItem(Icons.Rounded.Info, s.details) { open = false; actions.onDetails(song) }
+                MenuItem(Icons.Rounded.Delete, s.delete, tint = Ui.Danger, textColor = Ui.Danger) { open = false; actions.onDelete(song) }
             }
         }
     }
@@ -118,14 +119,15 @@ private fun MenuItem(
 
 @Composable
 fun RenameDialog(song: Song, visible: Boolean = true, onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
+    val s = LocalStrings.current
     var text by remember(song.id) { mutableStateOf(song.title) }
     SoftAlertDialog(
         visible = visible,
         onDismissRequest = onDismiss,
-        title = { Text("Rename", color = Ui.Ink, fontWeight = FontWeight.Bold) },
+        title = { Text(s.rename, color = Ui.Ink, fontWeight = FontWeight.Bold) },
         text = {
             Column {
-                Text("Changes the title shown in this app. The file on your device is not modified.", color = Ui.Muted, fontSize = 13.sp)
+                Text(s.renameNote, color = Ui.Muted, fontSize = 13.sp)
                 Spacer(Modifier.height(14.dp))
                 Box(
                     Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Ui.Tile).padding(horizontal = 16.dp, vertical = 14.dp),
@@ -141,29 +143,30 @@ fun RenameDialog(song: Song, visible: Boolean = true, onDismiss: () -> Unit, onC
                 }
             }
         },
-        confirmButton = { TextButton(onClick = { onConfirm(text) }) { Text("Save", color = Ui.Ink, fontWeight = FontWeight.SemiBold) } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", color = Ui.Muted) } },
+        confirmButton = { TextButton(onClick = { onConfirm(text) }) { Text(s.save, color = Ui.Ink, fontWeight = FontWeight.SemiBold) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(s.cancel, color = Ui.Muted) } },
     )
 }
 
 @Composable
 fun DetailsDialog(song: Song, visible: Boolean = true, onDismiss: () -> Unit) {
+    val s = LocalStrings.current
     SoftAlertDialog(
         visible = visible,
         onDismissRequest = onDismiss,
-        title = { Text("Details", color = Ui.Ink, fontWeight = FontWeight.Bold) },
+        title = { Text(s.details, color = Ui.Ink, fontWeight = FontWeight.Bold) },
         text = {
             Column {
-                DetailRow("Title", song.title)
-                DetailRow("Artist", song.artist)
-                DetailRow("Album", song.album)
-                DetailRow("Duration", fmt(song.durationMs))
-                DetailRow("Format", song.path.substringAfterLast('.', "").uppercase().ifEmpty { "Unknown" })
-                DetailRow("Added", DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(song.dateAdded * 1000)))
-                DetailRow("Location", song.path.ifEmpty { "Unknown" })
+                DetailRow(s.detailTitle, song.title)
+                DetailRow(s.detailArtist, s.artist(song.artist))
+                DetailRow(s.detailAlbum, s.album(song.album))
+                DetailRow(s.detailDuration, s.time(song.durationMs))
+                DetailRow(s.detailFormat, song.path.substringAfterLast('.', "").uppercase().ifEmpty { s.unknown })
+                DetailRow(s.detailAdded, s.digits(DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(song.dateAdded * 1000))))
+                DetailRow(s.detailLocation, song.path.ifEmpty { s.unknown })
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Close", color = Ui.Ink, fontWeight = FontWeight.SemiBold) } },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(s.close, color = Ui.Ink, fontWeight = FontWeight.SemiBold) } },
     )
 }
 
@@ -177,13 +180,14 @@ private fun DetailRow(label: String, value: String) {
 
 @Composable
 fun DeleteDialog(song: Song, visible: Boolean = true, onDismiss: () -> Unit, onConfirm: () -> Unit) {
+    val s = LocalStrings.current
     SoftAlertDialog(
         visible = visible,
         onDismissRequest = onDismiss,
-        title = { Text("Delete song?", color = Ui.Ink, fontWeight = FontWeight.Bold) },
-        text = { Text("\u201C${song.title}\u201D will be permanently deleted from your device.", color = Ui.Muted, fontSize = 14.sp) },
-        confirmButton = { TextButton(onClick = onConfirm) { Text("Delete", color = Ui.Danger, fontWeight = FontWeight.SemiBold) } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", color = Ui.Muted) } },
+        title = { Text(s.deleteTitle, color = Ui.Ink, fontWeight = FontWeight.Bold) },
+        text = { Text(s.deleteBody(song.title), color = Ui.Muted, fontSize = 14.sp) },
+        confirmButton = { TextButton(onClick = onConfirm) { Text(s.delete, color = Ui.Danger, fontWeight = FontWeight.SemiBold) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(s.cancel, color = Ui.Muted) } },
     )
 }
 
@@ -203,7 +207,7 @@ fun shareSong(ctx: Context, song: Song) {
  * on 10 it may need a per-file grant; older versions can delete directly. [onDone] runs when the
  * deletion already happened synchronously.
  */
-fun deleteSong(ctx: Context, song: Song, launch: (IntentSender) -> Unit, onDone: () -> Unit) {
+fun deleteSong(ctx: Context, song: Song, failMessage: String, launch: (IntentSender) -> Unit, onDone: () -> Unit) {
     if (Build.VERSION.SDK_INT >= 30) {
         val pi = MediaStore.createDeleteRequest(ctx.contentResolver, listOf(song.uri))
         launch(pi.intentSender)
@@ -216,7 +220,7 @@ fun deleteSong(ctx: Context, song: Song, launch: (IntentSender) -> Unit, onDone:
         if (Build.VERSION.SDK_INT >= 29 && e is RecoverableSecurityException) {
             launch(e.userAction.actionIntent.intentSender)
         } else {
-            Toast.makeText(ctx, "Can't delete this file", Toast.LENGTH_SHORT).show()
+            Toast.makeText(ctx, failMessage, Toast.LENGTH_SHORT).show()
         }
     }
 }

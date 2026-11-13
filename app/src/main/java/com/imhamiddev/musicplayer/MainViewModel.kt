@@ -14,8 +14,12 @@ import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.ListenableFuture
+import com.imhamiddev.musicplayer.data.AppLanguage
+import com.imhamiddev.musicplayer.data.ListenStats
 import com.imhamiddev.musicplayer.data.MusicRepository
 import com.imhamiddev.musicplayer.data.Prefs
+import com.imhamiddev.musicplayer.data.ProgressStyle
+import com.imhamiddev.musicplayer.data.StatsSnapshot
 import com.imhamiddev.musicplayer.data.Song
 import com.imhamiddev.musicplayer.data.SortField
 import com.imhamiddev.musicplayer.data.ThemeMode
@@ -48,6 +52,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _themeMode = MutableStateFlow(prefs.themeMode())
     val themeMode: StateFlow<ThemeMode> = _themeMode.asStateFlow()
+
+    private val _language = MutableStateFlow(prefs.language())
+    val language: StateFlow<AppLanguage> = _language.asStateFlow()
+
+    private val _progressStyle = MutableStateFlow(prefs.progressStyle())
+    val progressStyle: StateFlow<ProgressStyle> = _progressStyle.asStateFlow()
+
+    private val _stats = MutableStateFlow(StatsSnapshot.Empty)
+    val stats: StateFlow<StatsSnapshot> = _stats.asStateFlow()
 
     private val _loaded = MutableStateFlow(false)
     val loaded: StateFlow<Boolean> = _loaded.asStateFlow()
@@ -154,6 +167,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private var controller: MediaController? = null
+
+    // Set while the saved queue is put back, so the restored song is not bumped to the top of "Recent".
+    private var skipRecentId: Long? = null
+    private var restoreDone = false
     private val controllerFuture: ListenableFuture<MediaController>
 
     private val listener = object : Player.Listener {
@@ -167,7 +184,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             _positionMs.value = 0L
             _durationMs.value = 0L
             syncDuration()
-            if (id != null) addRecent(id)
+            if (id != null && id == skipRecentId) skipRecentId = null
+            else if (id != null) addRecent(id)
         }
 
         override fun onPlaybackStateChanged(playbackState: Int) {
@@ -201,9 +219,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 _repeat.value = c.repeatMode
                 _positionMs.value = c.currentPosition.coerceAtLeast(0L)
                 syncDuration()
+                tryRestore()
             } catch (_: Exception) {
             }
         }, ContextCompat.getMainExecutor(app))
+
+        ListenStats.init(app)
+        refreshStats()
 
         runCatching { app.getSystemService(ConnectivityManager::class.java)?.registerDefaultNetworkCallback(netCallback) }
 
@@ -222,7 +244,42 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             _rawSongs.value = MusicRepository.load(getApplication())
             _loaded.value = true
+            tryRestore()
         }
+    }
+
+    fun refreshStats() {
+        _stats.value = ListenStats.snapshot()
+    }
+
+    /**
+     * Puts the last queue back (paused, at the saved position) when the app starts fresh, so playback
+     * continues from the same song after the app was closed. Needs both the library and the player
+     * connection, so it is tried from both places and runs once.
+     */
+    private fun tryRestore() {
+        if (restoreDone) return
+        val c = controller ?: return
+        if (!_loaded.value) return
+        restoreDone = true
+        // The service is still alive with a queue (e.g. music kept playing): nothing to restore.
+        if (c.mediaItemCount > 0) return
+        val savedIds = prefs.playbackQueue()
+        if (savedIds.isEmpty()) return
+        val byId = _rawSongs.value.associateBy { it.id }
+        val titles = _titles.value
+        val queue = savedIds.mapNotNull { byId[it] }.map { song -> titles[song.id]?.let { song.copy(title = it) } ?: song }
+        if (queue.isEmpty()) return
+        val currentId = prefs.playbackCurrentId()
+        val found = queue.indexOfFirst { it.id == currentId }
+        val index = if (found >= 0) found else 0
+        // The saved position belongs to the saved song; if it is gone, start the neighbour from 0.
+        val position = if (found >= 0) prefs.playbackPosition() else 0L
+        skipRecentId = queue[index].id
+        c.setMediaItems(queue.map { toMediaItem(it) }, index, position)
+        c.shuffleModeEnabled = prefs.playbackShuffle()
+        c.repeatMode = prefs.playbackRepeat()
+        c.prepare()
     }
 
     fun setQuery(q: String) {
@@ -242,6 +299,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun setThemeMode(mode: ThemeMode) {
         _themeMode.value = mode
         prefs.saveThemeMode(mode)
+    }
+
+    fun setLanguage(language: AppLanguage) {
+        _language.value = language
+        prefs.saveLanguage(language)
+    }
+
+    fun setProgressStyle(style: ProgressStyle) {
+        _progressStyle.value = style
+        prefs.saveProgressStyle(style)
     }
 
     fun renameSong(song: Song, newTitle: String) {
