@@ -47,8 +47,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _rawSongs = MutableStateFlow<List<Song>>(emptyList())
     private val _titles = MutableStateFlow(prefs.titles())
 
-    /** Library songs with the user's in-app renames applied. */
-    val songs: StateFlow<List<Song>> = combine(_rawSongs, _titles) { list, titles ->
+    private val _hiddenFolders = MutableStateFlow(prefs.hiddenFolders())
+    val hiddenFolders: StateFlow<Set<String>> = _hiddenFolders.asStateFlow()
+
+    /** Library songs with the user's in-app renames applied, minus songs in hidden folders. */
+    val songs: StateFlow<List<Song>> = combine(_rawSongs, _titles, _hiddenFolders) { raw, titles, hidden ->
+        val list = if (hidden.isEmpty()) raw else raw.filter { it.folderPath !in hidden }
         if (titles.isEmpty()) list else list.map { s -> titles[s.id]?.let { s.copy(title = it) } ?: s }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
@@ -352,6 +356,18 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (!next.add(id)) next.remove(id)
         _favorites.value = next
         prefs.saveFavorites(next)
+    }
+
+    fun hideFolder(path: String) {
+        val next = _hiddenFolders.value + path
+        _hiddenFolders.value = next
+        prefs.saveHiddenFolders(next)
+    }
+
+    fun showFolder(path: String) {
+        val next = _hiddenFolders.value - path
+        _hiddenFolders.value = next
+        prefs.saveHiddenFolders(next)
     }
 
     // ---- Categories --------------------------------------------------------------------------

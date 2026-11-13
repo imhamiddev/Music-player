@@ -52,6 +52,17 @@ class Prefs(context: Context) {
         sp.edit().putString("sort_field", field.name).putBoolean("sort_asc", asc).apply()
     }
 
+    // ---- Hidden folders (their songs never show up in the app) ---------------------------------
+
+    fun hiddenFolders(): Set<String> = runCatching {
+        val arr = JSONArray(sp.getString("hidden_folders", "[]") ?: "[]")
+        (0 until arr.length()).mapTo(HashSet()) { arr.getString(it) }
+    }.getOrDefault(emptySet())
+
+    fun saveHiddenFolders(paths: Set<String>) {
+        sp.edit().putString("hidden_folders", JSONArray(paths.toList()).toString()).apply()
+    }
+
     // ---- Categories (user-made song groups) ----------------------------------------------------
 
     fun categories(): List<Category> = runCatching {

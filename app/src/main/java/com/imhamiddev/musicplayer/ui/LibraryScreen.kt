@@ -53,6 +53,8 @@ import androidx.compose.material.icons.rounded.ChevronLeft
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.VisibilityOff
+import androidx.compose.material3.TextButton
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.History
@@ -129,6 +131,7 @@ fun LibraryScreen(
     onOpenSettings: () -> Unit,
     actions: SongActions,
     catActions: CategoryActions,
+    onHideFolder: (String) -> Unit,
     onPlay: (Song, List<Song>) -> Unit,
     onOpenPlayer: () -> Unit,
     topInset: Dp = 0.dp,
@@ -200,6 +203,24 @@ fun LibraryScreen(
     BackHandler(enabled = tab == 1 && openFolder != null) { openFolder = null }
     BackHandler(enabled = tab == 4 && openCategory != null) { openCategory = null }
     BackHandler(enabled = selecting) { selectedIds = emptySet() }
+
+    var hideTarget by remember { mutableStateOf<FolderGroup?>(null) }
+    rememberHeld(hideTarget)?.let { g ->
+        SoftAlertDialog(
+            visible = hideTarget != null,
+            onDismissRequest = { hideTarget = null },
+            title = { Text(s.hideFolder, color = Ui.Ink, fontWeight = FontWeight.Bold) },
+            text = { Text(s.hideFolderBody(g.label(s), g.songs.size), color = Ui.Muted, fontSize = 14.sp) },
+            confirmButton = {
+                TextButton(onClick = {
+                    onHideFolder(g.path)
+                    if (openFolder == g.path) openFolder = null
+                    hideTarget = null
+                }) { Text(s.hide, color = Ui.Ink, fontWeight = FontWeight.SemiBold) }
+            },
+            dismissButton = { TextButton(onClick = { hideTarget = null }) { Text(s.cancel, color = Ui.Muted) } },
+        )
+    }
 
     val subtitle = when (tab) {
         0 -> s.songs(sorted.size)
@@ -321,6 +342,7 @@ fun LibraryScreen(
                                 FolderList(
                                     folders, bottomInset,
                                     if (q.isNotEmpty()) noResults(q, s) else EmptyInfo(Icons.Rounded.Folder, s.emptyFoldersTitle, s.emptyFoldersBody),
+                                    onLongPress = { hideTarget = it },
                                 ) { openFolder = it.path }
                             } else {
                                 Column(Modifier.fillMaxSize()) {
@@ -334,6 +356,7 @@ fun LibraryScreen(
                                             Text(openGroup?.label(s) ?: "", fontSize = 19.sp, fontWeight = FontWeight.Bold, color = Ui.Ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                             Text(openGroup?.pathLabel(s) ?: "", fontSize = 12.sp, color = Ui.Muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                         }
+                                        IconCircle(Icons.Rounded.VisibilityOff, { openGroup?.let { hideTarget = it } }, size = 42.dp, description = s.hideFolder)
                                     }
                                     Box(Modifier.weight(1f)) {
                                         SongList(
@@ -706,6 +729,7 @@ private fun FolderList(
     folders: List<FolderGroup>,
     bottomInset: Dp,
     empty: EmptyInfo,
+    onLongPress: (FolderGroup) -> Unit,
     onOpen: (FolderGroup) -> Unit,
 ) {
     if (folders.isEmpty()) {
@@ -723,7 +747,7 @@ private fun FolderList(
                 Modifier
                     .animateItem(fadeInSpec = Motion.soft(), placementSpec = Motion.soft(), fadeOutSpec = Motion.soft())
                     .fillMaxWidth()
-                    .bouncyClick(0.97f) { onOpen(g) }
+                    .bouncyClick(0.97f, onLongClick = { onLongPress(g) }) { onOpen(g) }
                     .clip(RoundedCornerShape(22.dp))
                     .background(Ui.Card)
                     .padding(8.dp),
