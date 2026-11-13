@@ -83,7 +83,8 @@ class Prefs(context: Context) {
 
     fun savePlaybackQueue(ids: List<Long>) = writeIds("pb_queue", ids)
 
-    fun playbackIndex(): Int = sp.getInt("pb_index", 0)
+    /** Media id of the song that was current when the state was saved. */
+    fun playbackCurrentId(): Long = sp.getLong("pb_current", -1L)
 
     fun playbackPosition(): Long = sp.getLong("pb_position", 0L)
 
@@ -92,9 +93,9 @@ class Prefs(context: Context) {
     /** 0 = off, 1 = one, 2 = all (Player.REPEAT_MODE_*). */
     fun playbackRepeat(): Int = sp.getInt("pb_repeat", 0)
 
-    fun savePlaybackPosition(index: Int, positionMs: Long, shuffle: Boolean, repeat: Int) {
+    fun savePlaybackPosition(currentId: Long, positionMs: Long, shuffle: Boolean, repeat: Int) {
         sp.edit()
-            .putInt("pb_index", index)
+            .putLong("pb_current", currentId)
             .putLong("pb_position", positionMs)
             .putBoolean("pb_shuffle", shuffle)
             .putInt("pb_repeat", repeat)
