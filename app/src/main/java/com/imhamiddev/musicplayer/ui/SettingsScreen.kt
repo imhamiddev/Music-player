@@ -4,6 +4,12 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material3.Icon
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -43,6 +49,7 @@ fun SettingsScreen(
     onLanguage: (AppLanguage) -> Unit,
     onProgressStyle: (ProgressStyle) -> Unit,
     onTheme: (ThemeMode) -> Unit,
+    onOpenSound: () -> Unit,
     onClose: () -> Unit,
 ) {
     val s = LocalStrings.current
@@ -66,6 +73,26 @@ fun SettingsScreen(
             Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(26.dp),
         ) {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .bouncyClick(0.97f, onClick = onOpenSound)
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(Ui.GreenTint)
+                    .padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(Modifier.size(44.dp).clip(CircleShape).background(Ui.GreenBrush), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Rounded.Tune, null, tint = Ui.OnAccent, modifier = Modifier.size(22.dp))
+                }
+                Spacer(Modifier.width(14.dp))
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(s.soundTitle, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Ui.Ink)
+                    Text(s.soundEntryHint, fontSize = 12.5.sp, color = Ui.Muted, lineHeight = 17.sp)
+                }
+                Icon(Icons.Rounded.ChevronRight, null, tint = Ui.Muted, modifier = Modifier.size(22.dp).mirrorInRtl())
+            }
+
             Section(s.settingsLanguage, s.settingsLanguageHint) {
                 // Each language is written in its own script, whatever language the app is in.
                 SegmentedTabs(

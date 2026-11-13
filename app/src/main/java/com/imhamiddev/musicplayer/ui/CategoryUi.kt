@@ -54,6 +54,9 @@ class CategoryActions(
     val onRename: (Category) -> Unit,
     val onDelete: (Category) -> Unit,
     val onAddSongs: (Category) -> Unit,
+    val onAddSelected: (Set<Long>) -> Unit,
+    val onRemoveSelected: (Category, Set<Long>) -> Unit,
+    val onFavoriteSelected: (Set<Long>) -> Unit,
 )
 
 // ---- List of categories (the "Lists" tab) -------------------------------------------------
@@ -183,17 +186,17 @@ fun DeleteCategoryDialog(category: Category, visible: Boolean, onDismiss: () -> 
 }
 
 @Composable
-private fun CheckDot(checked: Boolean) {
+internal fun CheckDot(checked: Boolean) {
     val bg by animateColorAsState(if (checked) Ui.GreenA else Ui.Tile, tween(260, easing = Motion.Silk), label = "dotbg")
     Box(Modifier.size(26.dp).clip(CircleShape).background(bg), contentAlignment = Alignment.Center) {
         if (checked) Icon(Icons.Rounded.Check, null, tint = Ui.OnAccent, modifier = Modifier.size(16.dp))
     }
 }
 
-/** From a song's menu: tick the categories the song should be in, or make a new one right here. */
+/** From a song's menu (or the selection bar): tick the categories the song(s) should be in, or make a new one. */
 @Composable
 fun CategoryPickerDialog(
-    song: Song,
+    songIds: Set<Long>,
     categories: List<Category>,
     visible: Boolean,
     onToggle: (Category) -> Unit,
@@ -201,7 +204,7 @@ fun CategoryPickerDialog(
     onDismiss: () -> Unit,
 ) {
     val s = LocalStrings.current
-    var newName by remember(song.id) { mutableStateOf("") }
+    var newName by remember(songIds) { mutableStateOf("") }
     SoftAlertDialog(
         visible = visible,
         onDismissRequest = onDismiss,
@@ -228,7 +231,7 @@ fun CategoryPickerDialog(
                                     c.name, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = Ui.Ink,
                                     maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
                                 )
-                                CheckDot(song.id in c.songIds)
+                                CheckDot(songIds.isNotEmpty() && c.songIds.containsAll(songIds))
                             }
                         }
                     }

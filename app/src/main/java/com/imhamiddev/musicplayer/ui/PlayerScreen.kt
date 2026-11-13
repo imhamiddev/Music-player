@@ -52,6 +52,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
@@ -93,6 +94,7 @@ fun PlayerScreen(
     onShuffle: () -> Unit,
     onRepeat: () -> Unit,
     onFav: () -> Unit,
+    onOpenSound: () -> Unit,
 ) {
     val str = LocalStrings.current
     val offsetY = remember { Animatable(0f) }
@@ -145,7 +147,7 @@ fun PlayerScreen(
                         Text(str.album(a), fontSize = 13.sp, color = Ui.Ink, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
-                Spacer(Modifier.width(44.dp))
+                IconCircle(Icons.Rounded.Tune, onOpenSound, size = 44.dp, description = str.soundTitle)
             }
 
             // Artwork

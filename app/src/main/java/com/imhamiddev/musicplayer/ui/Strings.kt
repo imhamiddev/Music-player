@@ -218,6 +218,51 @@ class Strings(val rtl: Boolean) {
     val themeLight get() = t("Light", "روشن")
     val themeDark get() = t("Dark", "تاریک")
 
+    // ---- Sound and sleep timer -----------------------------------------------------------------
+
+    val soundTitle get() = t("Sound & timer", "صدا و تایمر")
+    val soundEntryHint get() = t("Sleep timer, equalizer, bass, speed and smooth song changes.", "تایمر خواب، اکولایزر، بیس، سرعت و تغییر نرم آهنگ.")
+    val sleepTitle get() = t("Sleep timer", "تایمر خواب")
+    val sleepHint get() = t("Stops the music when the time is up, fading it out gently.", "وقتی زمان تمام شد، موسیقی با کم‌شدن نرم صدا قطع می‌شود.")
+    fun sleepMinutes(n: Int) = t("$n min", "${num(n)} دقیقه")
+    val sleepEndOfSong get() = t("End of this song", "پایان این آهنگ")
+    val sleepOff get() = t("Turn off", "خاموش کردن")
+    fun sleepStopsIn(clock: String) = t("Stops in $clock", "توقف تا ${digits(clock)} دیگر")
+    val sleepStopsAtEnd get() = t("Stops when this song ends", "با پایان این آهنگ متوقف می‌شود")
+    val speedTitle get() = t("Playback speed", "سرعت پخش")
+    val speedHint get() = t("Faster or slower, without changing the voice pitch.", "سریع‌تر یا کندتر، بدون تغییر در زیر و بمی صدا.")
+    fun speedLabel(v: Float): String {
+        val txt = if (v == v.toInt().toFloat()) v.toInt().toString() else v.toString().trimEnd('0')
+        return digits(txt) + "×"
+    }
+    val eqTitle get() = t("Equalizer", "اکولایزر")
+    val eqUnsupported get() = t("This device does not offer an equalizer.", "این دستگاه اکولایزر ندارد.")
+    val presetFlat get() = t("Flat", "عادی")
+    val presetBass get() = t("Bass", "بیس")
+    val presetTreble get() = t("Treble", "تیز")
+    val presetVocal get() = t("Vocal", "صدا")
+    val presetRock get() = t("Rock", "راک")
+    val presetChill get() = t("Chill", "آرام")
+    val bassTitle get() = t("Bass boost", "تقویت بیس")
+    val bassUnsupported get() = t("This device does not support bass boost.", "این دستگاه از تقویت بیس پشتیبانی نمی‌کند.")
+    fun freqLabel(hz: Int): String =
+        if (hz >= 1000) digits(String.format(java.util.Locale.US, "%.1f", hz / 1000f).removeSuffix(".0")) + t(" kHz", " کیلوهرتز")
+        else digits(hz.toString()) + t(" Hz", " هرتز")
+    val crossfadeTitle get() = t("Smooth song changes", "تغییر نرم آهنگ")
+    val crossfadeHint get() = t(
+        "Fades the end of a song out and the next one in. The two songs do not overlap.",
+        "پایان آهنگ را کم و آهنگ بعدی را به‌تدریج زیاد می‌کند. دو آهنگ روی هم پخش نمی‌شوند.",
+    )
+    fun crossfadeSecs(n: Int) = t("$n s", "${num(n)} ثانیه")
+
+    // ---- Selecting several songs ---------------------------------------------------------------
+
+    fun selectedCount(n: Int) = t("$n selected", "${num(n)} انتخاب‌شده")
+    val selectAll get() = t("All", "همه")
+    val pillCategory get() = t("Category", "دسته‌بندی")
+    val pillFavorite get() = t("Favorite", "علاقه‌مندی")
+    val pillRemove get() = t("Remove", "حذف از دسته")
+
     // ---- Listening stats -----------------------------------------------------------------------
 
     val statsTitle get() = t("Listening stats", "آمار گوش دادن")

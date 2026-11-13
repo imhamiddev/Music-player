@@ -8,6 +8,8 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.media.audiofx.BassBoost
+import android.media.audiofx.Equalizer
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
@@ -35,6 +37,10 @@ import com.imhamiddev.musicplayer.data.Prefs
 class PlaybackService : MediaSessionService() {
 
     private var mediaSession: MediaSession? = null
+    private var exo: ExoPlayer? = null
+    private var equalizer: Equalizer? = null
+    private var bassBoost: BassBoost? = null
+    private var fxSessionId = C.AUDIO_SESSION_ID_UNSET
     private lateinit var prefs: Prefs
     private val handler = Handler(Looper.getMainLooper())
 
@@ -97,7 +103,22 @@ class PlaybackService : MediaSessionService() {
     }
 
     private val stateListener = object : Player.Listener {
+        override fun onAudioSessionIdChanged(audioSessionId: Int) {
+            rebuildEffects(audioSessionId)
+        }
+
+        override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+            // "End of this song" sleep timer: the player paused itself at the end of the song.
+            if (!playWhenReady && reason == Player.PLAY_WHEN_READY_CHANGE_REASON_END_OF_MEDIA_ITEM &&
+                PlaybackFx.sleepEndOfSong.value
+            ) {
+                PlaybackFx.clearSleepState()
+                applyFx()
+            }
+        }
+
         override fun onIsPlayingChanged(isPlaying: Boolean) {
+            scheduleFx()
             val player = mediaSession?.player ?: return
             handler.removeCallbacks(tick)
             if (isPlaying) {
@@ -192,6 +213,7 @@ class PlaybackService : MediaSessionService() {
         super.onCreate()
         prefs = Prefs(this)
         ListenStats.init(this)
+        PlaybackFx.init(this)
         // Exact seeking: without this ExoPlayer snaps to the nearest sync point, which is off by seconds on many MP3s.
         val extractors = DefaultExtractorsFactory().setConstantBitrateSeekingEnabled(true)
         val player = ExoPlayer.Builder(this, DefaultMediaSourceFactory(this, extractors))
@@ -206,8 +228,12 @@ class PlaybackService : MediaSessionService() {
             .setHandleAudioBecomingNoisy(true)
             .setWakeMode(C.WAKE_MODE_LOCAL)
             .build()
+        exo = player
 
         player.addListener(stateListener)
+        PlaybackFx.service = this
+        rebuildEffects(player.audioSessionId)
+        applyFx()
 
         ContextCompat.registerReceiver(
             this, screenReceiver, IntentFilter(Intent.ACTION_SCREEN_ON), ContextCompat.RECEIVER_NOT_EXPORTED,
@@ -236,6 +262,128 @@ class PlaybackService : MediaSessionService() {
             .build()
     }
 
+    // ---- Sound: speed, equalizer, bass, crossfade, sleep timer -----------------------------------
+
+    private fun releaseEffects() {
+        runCatching { equalizer?.release() }
+        runCatching { bassBoost?.release() }
+        equalizer = null
+        bassBoost = null
+        fxSessionId = C.AUDIO_SESSION_ID_UNSET
+    }
+
+    private fun rebuildEffects(sessionId: Int) {
+        if (sessionId == C.AUDIO_SESSION_ID_UNSET || sessionId == fxSessionId) return
+        releaseEffects()
+        fxSessionId = sessionId
+        equalizer = runCatching { Equalizer(0, sessionId) }.getOrNull()
+        bassBoost = runCatching { BassBoost(0, sessionId) }.getOrNull()
+        val eq = equalizer
+        val info = eq?.let { e ->
+            runCatching {
+                val range = e.bandLevelRange
+                EqInfo(
+                    freqsHz = (0 until e.numberOfBands.toInt()).map { e.getCenterFreq(it.toShort()) / 1000 },
+                    minLevel = range[0].toInt(),
+                    maxLevel = range[1].toInt(),
+                )
+            }.getOrNull()
+        }
+        val bassOk = bassBoost?.let { b -> runCatching { b.strengthSupported }.getOrDefault(false) } ?: false
+        PlaybackFx.publishEffects(info, bassOk)
+        applyEffectValues()
+    }
+
+    private fun applyEffectValues() {
+        val info = PlaybackFx.eqInfo.value
+        equalizer?.let { e ->
+            runCatching {
+                if (info != null) {
+                    val levels = PlaybackFx.eqLevels.value
+                    for (i in info.freqsHz.indices) {
+                        val f = levels.getOrElse(i) { 0f }.coerceIn(-1f, 1f)
+                        val mb = if (f >= 0f) f * info.maxLevel else -f * info.minLevel
+                        e.setBandLevel(i.toShort(), mb.toInt().coerceIn(info.minLevel, info.maxLevel).toShort())
+                    }
+                }
+                e.setEnabled(PlaybackFx.eqEnabled.value)
+            }
+        }
+        bassBoost?.let { b ->
+            runCatching {
+                if (b.strengthSupported) {
+                    val strength = (PlaybackFx.bass.value * 1000f).toInt().coerceIn(0, 1000)
+                    b.setStrength(strength.toShort())
+                    b.setEnabled(strength > 0)
+                }
+            }
+        }
+    }
+
+    /** Re-reads every sound setting and the sleep timer from [PlaybackFx] and applies them. */
+    fun applyFx() {
+        val player = exo ?: return
+        val speed = PlaybackFx.speed.value
+        if (player.playbackParameters.speed != speed) player.setPlaybackSpeed(speed)
+        player.setPauseAtEndOfMediaItems(PlaybackFx.sleepEndOfSong.value)
+        applyEffectValues()
+        scheduleFx()
+        applyVolume()
+    }
+
+    private fun needsFxTick(): Boolean {
+        val player = exo ?: return false
+        return PlaybackFx.sleepEndsAt.value > 0L || (PlaybackFx.crossfadeOn.value && player.isPlaying)
+    }
+
+    private fun scheduleFx() {
+        handler.removeCallbacks(fxTick)
+        if (needsFxTick()) handler.postDelayed(fxTick, FX_TICK_MS)
+        else applyVolume()
+    }
+
+    private val fxTick = object : Runnable {
+        override fun run() {
+            val player = exo ?: return
+            val end = PlaybackFx.sleepEndsAt.value
+            if (end > 0L && System.currentTimeMillis() >= end) {
+                PlaybackFx.clearSleepState()
+                player.pause()
+            }
+            applyVolume()
+            if (needsFxTick()) handler.postDelayed(this, FX_TICK_MS)
+        }
+    }
+
+    private fun smooth(x: Float): Float {
+        val t = x.coerceIn(0f, 1f)
+        return t * t * (3f - 2f * t)
+    }
+
+    /** Volume = the lower of the sleep-timer fade-out and the fade-out/fade-in around song changes. */
+    private fun applyVolume() {
+        val player = exo ?: return
+        var v = 1f
+        val end = PlaybackFx.sleepEndsAt.value
+        if (end > 0L) {
+            val left = end - System.currentTimeMillis()
+            v = minOf(v, smooth(left.toFloat() / SLEEP_FADE_MS))
+        }
+        if (PlaybackFx.crossfadeOn.value) {
+            val dur = player.duration
+            val pos = player.currentPosition
+            if (dur > 0L && dur != C.TIME_UNSET) {
+                // Never let the fades eat more than a third of a short song.
+                val fade = minOf(PlaybackFx.crossfadeSec.value * 1000L, dur / 3L).coerceAtLeast(1L)
+                v = minOf(v, smooth(pos.toFloat() / fade))
+                if (player.repeatMode != Player.REPEAT_MODE_ONE) {
+                    v = minOf(v, smooth((dur - pos).toFloat() / fade))
+                }
+            }
+        }
+        if (player.volume != v) player.volume = v
+    }
+
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = mediaSession
 
     override fun onTaskRemoved(rootIntent: Intent?) {
@@ -246,6 +394,10 @@ class PlaybackService : MediaSessionService() {
 
     override fun onDestroy() {
         handler.removeCallbacks(tick)
+        handler.removeCallbacks(fxTick)
+        if (PlaybackFx.service === this) PlaybackFx.service = null
+        releaseEffects()
+        PlaybackFx.publishEffects(null, false)
         runCatching { unregisterReceiver(screenReceiver) }
         mediaSession?.run {
             saveState(player)
@@ -263,5 +415,7 @@ class PlaybackService : MediaSessionService() {
         const val PLAY_MS = 20_000L
         const val MIN_PLAY_MS = 5_000L
         const val SAVE_EVERY_MS = 10_000L
+        const val FX_TICK_MS = 100L
+        const val SLEEP_FADE_MS = 8_000f
     }
 }
