@@ -1,6 +1,7 @@
 package com.imhamiddev.musicplayer.ui
 
 import android.app.RecoverableSecurityException
+import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.content.IntentSender
@@ -203,6 +204,53 @@ fun shareSong(ctx: Context, song: Song) {
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     }
     runCatching { ctx.startActivity(Intent.createChooser(send, song.title)) }
+}
+
+/** File names cannot hold / \\ : * ? " < > | and should not end with a dot. */
+private fun safeFileName(title: String): String =
+    title.replace(Regex("[\\\\/:*?\"<>|]"), "_").trim().trimEnd('.').trim()
+
+/** Renames the real file (and its title tag in the media database) to [newTitle], keeping the extension. */
+fun applySongRename(ctx: Context, song: Song, newTitle: String): Boolean {
+    val base = safeFileName(newTitle)
+    if (base.isEmpty()) return false
+    val ext = song.path.substringAfterLast('.', "")
+    val values = ContentValues().apply {
+        put(MediaStore.Audio.Media.DISPLAY_NAME, if (ext.isNotEmpty()) "$base.$ext" else base)
+        put(MediaStore.Audio.Media.TITLE, newTitle.trim())
+    }
+    return runCatching { ctx.contentResolver.update(song.uri, values, null, null) > 0 }.getOrDefault(false)
+}
+
+/**
+ * Starts a rename. Android 11+ asks the system for permission to modify the file ([launch] gets the
+ * sheet; call [applySongRename] when it returns OK). On 10 a per-file grant may be needed; older
+ * versions can rename directly. [onDone] runs when the rename already happened.
+ */
+fun renameSongFile(ctx: Context, song: Song, newTitle: String, failMessage: String, launch: (IntentSender) -> Unit, onDone: () -> Unit) {
+    if (Build.VERSION.SDK_INT >= 30) {
+        launch(MediaStore.createWriteRequest(ctx.contentResolver, listOf(song.uri)).intentSender)
+        return
+    }
+    val base = safeFileName(newTitle)
+    if (base.isEmpty()) return
+    val ext = song.path.substringAfterLast('.', "")
+    val values = ContentValues().apply {
+        put(MediaStore.Audio.Media.DISPLAY_NAME, if (ext.isNotEmpty()) "$base.$ext" else base)
+        put(MediaStore.Audio.Media.TITLE, newTitle.trim())
+    }
+    try {
+        if (ctx.contentResolver.update(song.uri, values, null, null) > 0) onDone()
+        else Toast.makeText(ctx, failMessage, Toast.LENGTH_SHORT).show()
+    } catch (e: SecurityException) {
+        if (Build.VERSION.SDK_INT >= 29 && e is RecoverableSecurityException) {
+            launch(e.userAction.actionIntent.intentSender)
+        } else {
+            Toast.makeText(ctx, failMessage, Toast.LENGTH_SHORT).show()
+        }
+    } catch (e: Exception) {
+        Toast.makeText(ctx, failMessage, Toast.LENGTH_SHORT).show()
+    }
 }
 
 /**

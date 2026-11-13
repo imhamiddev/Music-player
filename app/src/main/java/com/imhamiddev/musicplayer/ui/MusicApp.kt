@@ -132,6 +132,29 @@ fun MusicApp(vm: MainViewModel) {
     var deleteCatId by remember { mutableStateOf<Long?>(null) }
     var addSongsCatId by remember { mutableStateOf<Long?>(null) }
 
+    var pendingRename by remember { mutableStateOf<Pair<Song, String>?>(null) }
+    val renameLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { res ->
+        val p = pendingRename
+        pendingRename = null
+        if (p != null && res.resultCode == Activity.RESULT_OK) {
+            if (applySongRename(ctx, p.first, p.second)) {
+                vm.renameSong(p.first, p.second)
+                vm.loadSongs()
+            } else {
+                android.widget.Toast.makeText(ctx, str.renameFailed, android.widget.Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+    fun startRename(song: Song, title: String) {
+        if (title.isBlank()) return
+        pendingRename = song to title
+        renameSongFile(
+            ctx, song, title, str.renameFailed,
+            launch = { sender -> renameLauncher.launch(IntentSenderRequest.Builder(sender).build()) },
+            onDone = { pendingRename = null; vm.renameSong(song, title); vm.loadSongs() },
+        )
+    }
+
     val deleteLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { res ->
         val song = pendingDelete
         pendingDelete = null
@@ -350,7 +373,7 @@ fun MusicApp(vm: MainViewModel) {
     val rn = rememberHeld(renameTarget)
     rn?.let { t ->
         RenameDialog(t, visible = renameTarget != null, onDismiss = { renameTarget = null }) { name ->
-            vm.renameSong(t, name)
+            startRename(t, name)
             renameTarget = null
         }
     }

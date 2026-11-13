@@ -244,7 +244,9 @@ class PlaybackService : MediaSessionService() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
 
+        setMediaNotificationProvider(ReadableNotificationProvider(this))
         mediaSession = MediaSession.Builder(this, player)
+            .setBitmapLoader(ThumbBitmapLoader(this))
             .setSessionActivity(openApp)
             .setCallback(object : MediaSession.Callback {
                 override fun onAddMediaItems(
