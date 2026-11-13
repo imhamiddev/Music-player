@@ -42,6 +42,10 @@ object PlaybackFx {
     private val _sleepEndsAt = MutableStateFlow(0L)
     val sleepEndsAt: StateFlow<Long> = _sleepEndsAt.asStateFlow()
 
+    /** The preset (minutes) the running sleep timer was started with; 0 when none or end of song. */
+    private val _sleepMinutes = MutableStateFlow(0)
+    val sleepMinutes: StateFlow<Int> = _sleepMinutes.asStateFlow()
+
     /** Sleep timer set to "end of this song". */
     private val _sleepEndOfSong = MutableStateFlow(false)
     val sleepEndOfSong: StateFlow<Boolean> = _sleepEndOfSong.asStateFlow()
@@ -104,17 +108,20 @@ object PlaybackFx {
 
     fun startSleep(minutes: Int) {
         _sleepEndOfSong.value = false
+        _sleepMinutes.value = minutes
         _sleepEndsAt.value = System.currentTimeMillis() + minutes * 60_000L
         service?.applyFx()
     }
 
     fun startSleepAtEndOfSong() {
         _sleepEndsAt.value = 0L
+        _sleepMinutes.value = 0
         _sleepEndOfSong.value = true
         service?.applyFx()
     }
 
     fun cancelSleep() {
+        _sleepMinutes.value = 0
         _sleepEndsAt.value = 0L
         _sleepEndOfSong.value = false
         service?.applyFx()
@@ -128,6 +135,7 @@ object PlaybackFx {
     }
 
     internal fun clearSleepState() {
+        _sleepMinutes.value = 0
         _sleepEndsAt.value = 0L
         _sleepEndOfSong.value = false
     }

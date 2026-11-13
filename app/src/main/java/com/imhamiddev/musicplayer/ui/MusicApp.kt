@@ -108,6 +108,7 @@ fun MusicApp(vm: MainViewModel) {
     val progressStyle by vm.progressStyle.collectAsState()
     val stats by vm.stats.collectAsState()
     val categories by vm.categories.collectAsState()
+    val hiddenFolders by vm.hiddenFolders.collectAsState()
     val str = LocalStrings.current
 
     var statsOpen by rememberSaveable { mutableStateOf(false) }
@@ -243,6 +244,7 @@ fun MusicApp(vm: MainViewModel) {
             onOpenSettings = { settingsOpen = true },
             actions = actions,
             catActions = catActions,
+            onHideFolder = vm::hideFolder,
             onPlay = vm::play,
             onOpenPlayer = { playerOpen = true },
             topInset = bannerPush,
@@ -324,6 +326,8 @@ fun MusicApp(vm: MainViewModel) {
                 onLanguage = vm::setLanguage,
                 onProgressStyle = vm::setProgressStyle,
                 onTheme = vm::setThemeMode,
+                hiddenFolders = hiddenFolders.sorted(),
+                onShowFolder = vm::showFolder,
                 onOpenSound = { soundOpen = true },
                 onClose = { settingsOpen = false },
             )

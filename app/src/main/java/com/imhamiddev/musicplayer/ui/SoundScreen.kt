@@ -142,8 +142,8 @@ fun SoftSwitch(checked: Boolean, onChange: (Boolean) -> Unit) {
 
 @Composable
 private fun Chip(label: String, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    val bg by animateColorAsState(if (selected) Ui.GreenTint else Ui.Tile, tween(260, easing = Motion.Silk), label = "chipbg")
-    val fg by animateColorAsState(if (selected) Ui.Ink else Ui.Muted, tween(260, easing = Motion.Silk), label = "chipfg")
+    val bg by animateColorAsState(if (selected) Ui.GreenA else Ui.Tile, tween(260, easing = Motion.Silk), label = "chipbg")
+    val fg by animateColorAsState(if (selected) Ui.OnAccent else Ui.Ink, tween(260, easing = Motion.Silk), label = "chipfg")
     Box(
         modifier.bouncyClick(0.94f, onClick = onClick).clip(RoundedCornerShape(50)).background(bg).padding(horizontal = 14.dp, vertical = 10.dp),
         contentAlignment = Alignment.Center,
@@ -155,6 +155,7 @@ private fun SleepCard() {
     val s = LocalStrings.current
     val endsAt by PlaybackFx.sleepEndsAt.collectAsState()
     val endOfSong by PlaybackFx.sleepEndOfSong.collectAsState()
+    val chosen by PlaybackFx.sleepMinutes.collectAsState()
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(endsAt) {
         while (endsAt > 0L) {
@@ -176,12 +177,12 @@ private fun SleepCard() {
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             sleepChoices.forEach { m ->
-                Chip(s.sleepMinutes(m), false, Modifier.weight(1f)) { PlaybackFx.startSleep(m) }
+                Chip(s.sleepMinutes(m), endsAt > 0L && chosen == m, Modifier.weight(1f)) { PlaybackFx.startSleep(m) }
             }
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Chip(s.sleepEndOfSong, endOfSong, Modifier.weight(1f)) { PlaybackFx.startSleepAtEndOfSong() }
-            Chip(s.sleepOff, false, Modifier.weight(1f).alpha(if (active) 1f else 0.5f)) { PlaybackFx.cancelSleep() }
+            Chip(s.sleepOff, !active, Modifier.weight(1f)) { PlaybackFx.cancelSleep() }
         }
     }
 }
@@ -196,6 +197,7 @@ private fun SpeedCard() {
             selected = speeds.indexOfFirst { abs(it - speed) < 0.01f }.coerceAtLeast(1),
             onSelect = { PlaybackFx.setSpeed(speeds[it]) },
             modifier = Modifier.fillMaxWidth(),
+            accent = true,
         )
     }
 }
@@ -281,6 +283,7 @@ private fun CrossfadeCard() {
                 selected = fadeChoices.indexOf(sec).coerceAtLeast(0),
                 onSelect = { PlaybackFx.setCrossfadeSec(fadeChoices[it]) },
                 modifier = Modifier.fillMaxWidth(),
+                accent = true,
             )
         }
     }

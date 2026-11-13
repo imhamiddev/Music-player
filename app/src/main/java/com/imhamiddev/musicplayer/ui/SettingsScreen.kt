@@ -8,7 +8,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.material3.Icon
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -49,6 +51,8 @@ fun SettingsScreen(
     onLanguage: (AppLanguage) -> Unit,
     onProgressStyle: (ProgressStyle) -> Unit,
     onTheme: (ThemeMode) -> Unit,
+    hiddenFolders: List<String>,
+    onShowFolder: (String) -> Unit,
     onOpenSound: () -> Unit,
     onClose: () -> Unit,
 ) {
@@ -131,6 +135,32 @@ fun SettingsScreen(
                     onSelect = { onTheme(when (it) { 0 -> ThemeMode.System; 1 -> ThemeMode.Light; else -> ThemeMode.Dark }) },
                     modifier = Modifier.fillMaxWidth(),
                 )
+            }
+            Section(s.hiddenFoldersTitle, s.hiddenFoldersHint) {
+                if (hiddenFolders.isEmpty()) {
+                    Text(s.noHiddenFolders, fontSize = 13.sp, color = Ui.Muted)
+                } else {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        hiddenFolders.forEach { path ->
+                            val rel = path.removePrefix("/storage/emulated/0").removePrefix("/")
+                            Row(
+                                Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(Ui.Card).padding(start = 14.dp, end = 10.dp, top = 10.dp, bottom = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Icon(Icons.Rounded.Folder, null, tint = Ui.Ink, modifier = Modifier.size(22.dp))
+                                Spacer(Modifier.width(12.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text(if (path.isEmpty()) s.storage else path.substringAfterLast('/'), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Ui.Ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    Text(rel.ifEmpty { s.internalStorage }, fontSize = 11.5.sp, color = Ui.Muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                }
+                                Spacer(Modifier.width(8.dp))
+                                Box(
+                                    Modifier.bouncyClick(0.94f) { onShowFolder(path) }.clip(RoundedCornerShape(50)).background(Ui.GreenA).padding(horizontal = 14.dp, vertical = 8.dp),
+                                ) { Text(s.show, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Ui.OnAccent) }
+                            }
+                        }
+                    }
+                }
             }
             Spacer(Modifier.height(24.dp))
         }

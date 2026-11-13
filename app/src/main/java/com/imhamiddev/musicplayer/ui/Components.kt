@@ -231,6 +231,7 @@ fun SegmentedTabs(
     selected: Int,
     onSelect: (Int) -> Unit,
     modifier: Modifier = Modifier,
+    accent: Boolean = false,
 ) {
     val shape = RoundedCornerShape(50)
     BoxWithConstraints(
@@ -249,11 +250,11 @@ fun SegmentedTabs(
                 .fillMaxHeight()
                 .shadow(6.dp, shape, ambientColor = Color.Black.copy(0.08f), spotColor = Color.Black.copy(0.14f))
                 .clip(shape)
-                .background(Ui.Card),
+                .background(if (accent) Ui.GreenA else Ui.Card),
         )
         Row(Modifier.fillMaxSize()) {
             labels.forEachIndexed { i, label ->
-                val color by animateColorAsState(if (i == selected) Ui.Ink else Ui.Muted, tween(260, easing = Motion.Silk), label = "tabc")
+                val color by animateColorAsState(if (i == selected) (if (accent) Ui.OnAccent else Ui.Ink) else Ui.Muted, tween(260, easing = Motion.Silk), label = "tabc")
                 Box(
                     Modifier.weight(1f).fillMaxHeight().bouncyClick(0.94f) { onSelect(i) },
                     contentAlignment = Alignment.Center,

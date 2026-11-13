@@ -218,6 +218,22 @@ class Strings(val rtl: Boolean) {
     val themeLight get() = t("Light", "روشن")
     val themeDark get() = t("Dark", "تاریک")
 
+    // ---- Hidden folders ------------------------------------------------------------------------
+
+    val hideFolder get() = t("Hide folder", "پنهان کردن پوشه")
+    fun hideFolderBody(name: String, n: Int) = t(
+        "The $n songs in \"$name\" will not show up in the app. You can bring the folder back from Settings.",
+        "${num(n)} آهنگِ «$name» در برنامه نمایش داده نمی‌شود. می‌توانید پوشه را از تنظیمات برگردانید.",
+    )
+    val hide get() = t("Hide", "پنهان کن")
+    val show get() = t("Show", "نمایش")
+    val hiddenFoldersTitle get() = t("Hidden folders", "پوشه‌های پنهان")
+    val hiddenFoldersHint get() = t(
+        "Songs in these folders do not show up in the app. Long-press a folder, or open it and tap the eye, to hide it.",
+        "آهنگ‌های این پوشه‌ها در برنامه نمایش داده نمی‌شوند. برای پنهان کردن، روی پوشه نگه دارید یا آن را باز کنید و روی آیکون چشم بزنید.",
+    )
+    val noHiddenFolders get() = t("No hidden folders.", "پوشه‌ای پنهان نشده است.")
+
     // ---- Sound and sleep timer -----------------------------------------------------------------
 
     val soundTitle get() = t("Sound & timer", "صدا و تایمر")
