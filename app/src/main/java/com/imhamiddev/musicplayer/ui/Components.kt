@@ -71,6 +71,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -91,12 +92,15 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.imhamiddev.musicplayer.data.ProgressStyle
 import com.imhamiddev.musicplayer.data.Song
 import kotlin.math.PI
 import kotlin.math.abs
@@ -129,6 +133,11 @@ fun Modifier.bouncyClick(
         .graphicsLayer { scaleX = s; scaleY = s }
         .clickable(interactionSource = src, indication = null, enabled = enabled, onClick = onClick)
 }
+
+/** Flips directional icons (arrows, chevrons) when the layout runs right-to-left. */
+@Composable
+fun Modifier.mirrorInRtl(): Modifier =
+    if (LocalLayoutDirection.current == LayoutDirection.Rtl) this.graphicsLayer { scaleX = -1f } else this
 
 @Composable
 fun IconCircle(
@@ -249,6 +258,7 @@ fun SegmentedTabs(
 @Composable
 fun SearchPill(query: String, onQuery: (String) -> Unit, resultCount: Int, modifier: Modifier = Modifier) {
     val focus = LocalFocusManager.current
+    val s = LocalStrings.current
     val shape = RoundedCornerShape(50)
     Row(
         modifier
@@ -264,7 +274,7 @@ fun SearchPill(query: String, onQuery: (String) -> Unit, resultCount: Int, modif
         Spacer(Modifier.width(10.dp))
         Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
             if (query.isEmpty()) {
-                Text("Search songs, artists, albums", color = Ui.Muted, fontSize = 15.sp, maxLines = 1)
+                Text(s.searchHint, color = Ui.Muted, fontSize = 15.sp, maxLines = 1)
             }
             BasicTextField(
                 value = query,
@@ -297,7 +307,7 @@ fun SearchPill(query: String, onQuery: (String) -> Unit, resultCount: Int, modif
                         label = "count",
                     ) { n ->
                         Text(
-                            if (n == 1) "1 result" else "$n results",
+                            s.results(n),
                             color = Ui.OnAccent, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
                         )
                     }
@@ -477,6 +487,7 @@ fun Waveform(
 /** Pill shown above the waveform while the finger is down: the time under the finger and the jump. */
 @Composable
 fun ScrubBubble(scrub: Float?, posMs: Long, durationMs: Long, modifier: Modifier = Modifier) {
+    val s = LocalStrings.current
     val last = remember { FloatArray(1) }
     if (scrub != null) last[0] = scrub
     val a by animateFloatAsState(if (scrub != null) 1f else 0f, tween(260, easing = Motion.Silk), label = "bubble")
@@ -491,9 +502,109 @@ fun ScrubBubble(scrub: Float?, posMs: Long, durationMs: Long, modifier: Modifier
             Modifier.clip(RoundedCornerShape(50)).background(Ui.GreenBrush).padding(horizontal = 16.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(fmt(target), color = Ui.OnAccent, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            Text(s.time(target), color = Ui.OnAccent, fontSize = 18.sp, fontWeight = FontWeight.Bold)
             Spacer(Modifier.width(8.dp))
-            Text("$sign${fmt(abs(delta))}", color = Ui.OnAccent.copy(alpha = 0.65f), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+            Text("$sign${s.time(abs(delta))}", color = Ui.OnAccent.copy(alpha = 0.65f), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
         }
+    }
+}
+
+// ---- Simple line progress (alternative to the waveform, chosen in Settings) -----------------
+
+/**
+ * A plain progress line with a round thumb. Same gestures as [Waveform]: touching shows the target
+ * time at once, dragging moves it, lifting seeks.
+ */
+@Composable
+fun LineProgress(
+    progress: Float,
+    onSeek: (Float) -> Unit,
+    modifier: Modifier = Modifier,
+    unplayed: Color = Color.White.copy(alpha = 0.2f),
+    onScrub: (Float?) -> Unit = {},
+) {
+    var dragging by remember { mutableStateOf(false) }
+    var dragFrac by remember { mutableFloatStateOf(0f) }
+    val smooth by animateFloatAsState(progress, tween(260, easing = LinearEasing), label = "lnp")
+    val grow by animateFloatAsState(if (dragging) 1f else 0f, tween(200, easing = Motion.Silk), label = "lng")
+    val seek by rememberUpdatedState(onSeek)
+    val scrub by rememberUpdatedState(onScrub)
+
+    Canvas(
+        modifier.pointerInput(Unit) {
+            // The line is inset by the thumb radius so the thumb never gets cut off at either end.
+            val pad = LineThumbRoom.toPx()
+            awaitEachGesture {
+                val down = awaitFirstDown(requireUnconsumed = false)
+                down.consume()
+                val span = (size.width - 2f * pad).coerceAtLeast(1f)
+                dragging = true
+                dragFrac = ((down.position.x - pad) / span).coerceIn(0f, 1f)
+                scrub(dragFrac)
+                var cancelled = false
+                while (true) {
+                    val event = awaitPointerEvent()
+                    val change = event.changes.firstOrNull { it.id == down.id }
+                    if (change == null) {
+                        cancelled = true
+                        break
+                    }
+                    dragFrac = ((change.position.x - pad) / span).coerceIn(0f, 1f)
+                    scrub(dragFrac)
+                    change.consume()
+                    if (!change.pressed) break
+                }
+                dragging = false
+                scrub(null)
+                if (!cancelled) seek(dragFrac)
+            }
+        },
+    ) {
+        val pad = LineThumbRoom.toPx()
+        val span = (size.width - 2f * pad).coerceAtLeast(1f)
+        val shown = if (dragging) dragFrac else smooth
+        val midY = size.height / 2f
+        val trackH = 6.dp.toPx()
+        val endX = pad + span * shown
+        drawLine(unplayed, Offset(pad, midY), Offset(pad + span, midY), trackH, StrokeCap.Round)
+        if (shown > 0.002f) {
+            val brush = Brush.horizontalGradient(listOf(Ui.GreenA, Ui.GreenB), startX = pad, endX = pad + span)
+            drawLine(brush, Offset(pad, midY), Offset(endX, midY), trackH, StrokeCap.Round)
+        }
+        val r = (6.dp + 3.dp * grow).toPx()
+        if (grow > 0.01f) drawCircle(Ui.GreenA.copy(alpha = 0.28f * grow), r * 2.1f, Offset(endX, midY))
+        drawCircle(Color.White, r, Offset(endX, midY))
+    }
+}
+
+private val LineThumbRoom = 10.dp
+
+/** The song progress in the style picked in Settings. */
+@Composable
+fun SeekBar(
+    style: ProgressStyle,
+    seed: Long,
+    progress: Float,
+    playing: Boolean,
+    onSeek: (Float) -> Unit,
+    onScrub: (Float?) -> Unit,
+    waveHeight: Dp,
+    modifier: Modifier = Modifier,
+) {
+    when (style) {
+        ProgressStyle.Waveform -> Waveform(
+            seed = seed,
+            progress = progress,
+            playing = playing,
+            onSeek = onSeek,
+            onScrub = onScrub,
+            modifier = modifier.height(waveHeight),
+        )
+        ProgressStyle.Line -> LineProgress(
+            progress = progress,
+            onSeek = onSeek,
+            onScrub = onScrub,
+            modifier = modifier.height(44.dp),
+        )
     }
 }
