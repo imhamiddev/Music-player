@@ -31,6 +31,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -117,9 +118,11 @@ fun fmt(ms: Long): String {
 // ---- Micro-interaction primitives ----------------------------------------------------------
 
 /** Springy press feedback + click, without ripple (matches the soft, tactile feel of the reference). */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 fun Modifier.bouncyClick(
     pressedScale: Float = 0.92f,
     enabled: Boolean = true,
+    onLongClick: (() -> Unit)? = null,
     onClick: () -> Unit,
 ): Modifier = composed {
     val src = remember { MutableInteractionSource() }
@@ -131,7 +134,16 @@ fun Modifier.bouncyClick(
     )
     this
         .graphicsLayer { scaleX = s; scaleY = s }
-        .clickable(interactionSource = src, indication = null, enabled = enabled, onClick = onClick)
+        .then(
+            if (onLongClick == null) {
+                Modifier.clickable(interactionSource = src, indication = null, enabled = enabled, onClick = onClick)
+            } else {
+                Modifier.combinedClickable(
+                    interactionSource = src, indication = null, enabled = enabled,
+                    onClick = onClick, onLongClick = onLongClick,
+                )
+            },
+        )
 }
 
 /** Flips directional icons (arrows, chevrons) when the layout runs right-to-left. */

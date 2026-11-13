@@ -28,6 +28,7 @@ import com.imhamiddev.musicplayer.data.UpdateState
 import com.imhamiddev.musicplayer.data.Updater
 import android.net.ConnectivityManager
 import android.net.Network
+import com.imhamiddev.musicplayer.playback.PlaybackFx
 import com.imhamiddev.musicplayer.playback.PlaybackService
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -229,6 +230,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }, ContextCompat.getMainExecutor(app))
 
         ListenStats.init(app)
+        PlaybackFx.init(app)
         refreshStats()
 
         runCatching { app.getSystemService(ConnectivityManager::class.java)?.registerDefaultNetworkCallback(netCallback) }
@@ -361,11 +363,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Creates a category and returns its id, or null when the name is blank. */
-    fun createCategory(name: String, firstSongId: Long? = null): Long? {
+    fun createCategory(name: String, songIds: List<Long> = emptyList()): Long? {
         val n = name.trim()
         if (n.isEmpty()) return null
         val id = System.currentTimeMillis()
-        updateCategories { it + Category(id, n, listOfNotNull(firstSongId)) }
+        updateCategories { it + Category(id, n, songIds.distinct()) }
         return id
     }
 
@@ -385,6 +387,25 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 else c.copy(songIds = if (songId in c.songIds) c.songIds - songId else c.songIds + songId)
             }
         }
+    }
+
+    fun addSongsToCategory(categoryId: Long, ids: Collection<Long>) {
+        updateCategories { list ->
+            list.map { c -> if (c.id == categoryId) c.copy(songIds = c.songIds + ids.filter { it !in c.songIds }) else c }
+        }
+    }
+
+    fun removeSongsFromCategory(categoryId: Long, ids: Collection<Long>) {
+        val gone = ids.toSet()
+        updateCategories { list ->
+            list.map { c -> if (c.id == categoryId) c.copy(songIds = c.songIds.filter { it !in gone }) else c }
+        }
+    }
+
+    fun addToFavorites(ids: Collection<Long>) {
+        val next = _favorites.value + ids
+        _favorites.value = next
+        prefs.saveFavorites(next)
     }
 
     /** Replaces the whole song list of a category (used by the multi-select "add songs" dialog). */

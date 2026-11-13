@@ -76,6 +76,31 @@ class Prefs(context: Context) {
         sp.edit().putString("categories", arr.toString()).apply()
     }
 
+    // ---- Sound: speed, equalizer, bass, crossfade ----------------------------------------------
+
+    fun speed(): Float = sp.getFloat("speed", 1f)
+    fun saveSpeed(v: Float) { sp.edit().putFloat("speed", v).apply() }
+
+    fun eqEnabled(): Boolean = sp.getBoolean("eq_enabled", false)
+    fun saveEqEnabled(on: Boolean) { sp.edit().putBoolean("eq_enabled", on).apply() }
+
+    /** Band levels as fractions of the device's range: -1 = fully down, +1 = fully up. */
+    fun eqLevels(): List<Float> =
+        sp.getString("eq_levels", "").orEmpty().split(',').mapNotNull { it.toFloatOrNull() }
+
+    fun saveEqLevels(levels: List<Float>) {
+        sp.edit().putString("eq_levels", levels.joinToString(",")).apply()
+    }
+
+    fun bass(): Float = sp.getFloat("bass", 0f)
+    fun saveBass(v: Float) { sp.edit().putFloat("bass", v).apply() }
+
+    fun crossfadeOn(): Boolean = sp.getBoolean("crossfade_on", false)
+    fun saveCrossfadeOn(on: Boolean) { sp.edit().putBoolean("crossfade_on", on).apply() }
+
+    fun crossfadeSec(): Int = sp.getInt("crossfade_sec", 4)
+    fun saveCrossfadeSec(v: Int) { sp.edit().putInt("crossfade_sec", v).apply() }
+
     // ---- Language and player look --------------------------------------------------------------
 
     fun language(): AppLanguage =

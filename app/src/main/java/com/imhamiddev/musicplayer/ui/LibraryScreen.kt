@@ -46,6 +46,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AccessTime
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ArrowUpward
 import androidx.compose.material.icons.rounded.BarChart
 import androidx.compose.material.icons.rounded.ChevronLeft
@@ -69,6 +70,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -97,6 +100,13 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.sqrt
+
+/** Songs picked with a long press; while any are picked, taps toggle instead of play. */
+class SongSelection(val ids: Set<Long>, val toggle: (Long) -> Unit) {
+    val active: Boolean get() = ids.isNotEmpty()
+}
+
+val LocalSelection = compositionLocalOf { SongSelection(emptySet()) {} }
 
 internal class EmptyInfo(val icon: ImageVector, val title: String, val body: String)
 
@@ -128,6 +138,7 @@ fun LibraryScreen(
     var openFolder by rememberSaveable { mutableStateOf<String?>(null) }
     var openCategory by rememberSaveable { mutableStateOf<Long?>(null) }
     var sortOpen by remember { mutableStateOf(false) }
+    var selectedIds by remember { mutableStateOf(emptySet<Long>()) }
 
     val q = query.trim()
     val matches = remember(songs, q) {
@@ -173,11 +184,22 @@ fun LibraryScreen(
         val ids = openCat?.songIds?.toSet() ?: emptySet()
         sorted.filter { it.id in ids }
     }
+    val visibleList: List<Song> = when (tab) {
+        0 -> sorted
+        1 -> openGroup?.songs ?: emptyList()
+        2 -> favs
+        3 -> recentList
+        else -> if (openCat == null) emptyList() else catSongs
+    }
+    val selecting = selectedIds.isNotEmpty()
+    // Leaving the list you picked from clears the picks.
+    LaunchedEffect(tab, openFolder, openCategory) { selectedIds = emptySet() }
     // A category that was deleted while open: go back to the list.
     LaunchedEffect(openCat?.id, openCategory) { if (openCat == null && openCategory != null) openCategory = null }
 
     BackHandler(enabled = tab == 1 && openFolder != null) { openFolder = null }
     BackHandler(enabled = tab == 4 && openCategory != null) { openCategory = null }
+    BackHandler(enabled = selecting) { selectedIds = emptySet() }
 
     val subtitle = when (tab) {
         0 -> s.songs(sorted.size)
@@ -194,7 +216,27 @@ fun LibraryScreen(
         else -> if (openCategory == null) categories.size else catSongs.size
     }
 
+    val selection = SongSelection(selectedIds) { id ->
+        selectedIds = if (id in selectedIds) selectedIds - id else selectedIds + id
+    }
+    CompositionLocalProvider(LocalSelection provides selection) {
     Column(Modifier.fillMaxSize().statusBarsPadding().padding(top = topInset)) {
+        AnimatedContent(
+            targetState = selecting,
+            transitionSpec = { fadeIn(tween(260, easing = Motion.Silk)) togetherWith fadeOut(tween(200, easing = Motion.Silk)) },
+            label = "headerswap",
+        ) { sel ->
+        if (sel) {
+            SelectionBar(
+                count = selectedIds.size,
+                inCategory = tab == 4 && openCat != null,
+                onClose = { selectedIds = emptySet() },
+                onAll = { selectedIds = visibleList.mapTo(HashSet()) { it.id } },
+                onCategory = { catActions.onAddSelected(selectedIds); selectedIds = emptySet() },
+                onFavorite = { catActions.onFavoriteSelected(selectedIds); selectedIds = emptySet() },
+                onRemove = { openCat?.let { catActions.onRemoveSelected(it, selectedIds) }; selectedIds = emptySet() },
+            )
+        } else {
         // Header
         Row(
             Modifier.fillMaxWidth().padding(start = 24.dp, end = 16.dp, top = 6.dp),
@@ -231,6 +273,8 @@ fun LibraryScreen(
                     )
                 }
             }
+        }
+        }
         }
 
         SearchPill(query, onQuery, resultCount, Modifier.padding(start = 20.dp, end = 20.dp, top = 10.dp))
@@ -363,6 +407,48 @@ fun LibraryScreen(
                 }
             }
         }
+    }
+    }
+}
+
+@Composable
+private fun SelectionBar(
+    count: Int,
+    inCategory: Boolean,
+    onClose: () -> Unit,
+    onAll: () -> Unit,
+    onCategory: () -> Unit,
+    onFavorite: () -> Unit,
+    onRemove: () -> Unit,
+) {
+    val s = LocalStrings.current
+    Column(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 6.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconCircle(Icons.Rounded.Close, onClose, size = 38.dp, iconSize = 19.dp, description = s.cancel)
+            Spacer(Modifier.width(12.dp))
+            Text(s.selectedCount(count), fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Ui.Ink, modifier = Modifier.weight(1f))
+            ActionPill(null, s.selectAll, onAll)
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ActionPill(Icons.Rounded.Add, s.pillCategory, onCategory, Modifier.weight(1f))
+            ActionPill(Icons.Rounded.Favorite, s.pillFavorite, onFavorite, Modifier.weight(1f))
+            if (inCategory) ActionPill(Icons.Rounded.Close, s.pillRemove, onRemove, Modifier.weight(1f))
+        }
+    }
+}
+
+@Composable
+private fun ActionPill(icon: ImageVector?, label: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Row(
+        modifier.bouncyClick(0.95f, onClick = onClick).clip(RoundedCornerShape(50)).background(Ui.Tile).padding(horizontal = 14.dp, vertical = 9.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (icon != null) {
+            Icon(icon, null, tint = Ui.Ink, modifier = Modifier.size(17.dp))
+            Spacer(Modifier.width(6.dp))
+        }
+        Text(label, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Ui.Ink, maxLines = 1)
     }
 }
 
@@ -570,6 +656,8 @@ private fun SongRow(
     modifier: Modifier = Modifier,
 ) {
     val s = LocalStrings.current
+    val sel = LocalSelection.current
+    val selected = song.id in sel.ids
     var shown by remember { mutableStateOf(index >= 12) }
     LaunchedEffect(Unit) {
         if (!shown) {
@@ -578,12 +666,12 @@ private fun SongRow(
         }
     }
     val a by animateFloatAsState(if (shown) 1f else 0f, tween(450, easing = Motion.Silk), label = "rowa")
-    val bg by animateColorAsState(if (isCurrent) Ui.GreenTint else Ui.Card, tween(390, easing = Motion.Silk), label = "rowbg")
+    val bg by animateColorAsState(if (isCurrent || selected) Ui.GreenTint else Ui.Card, tween(390, easing = Motion.Silk), label = "rowbg")
     Row(
         modifier
             .graphicsLayer { alpha = a; translationY = (1f - a) * 26.dp.toPx() }
             .fillMaxWidth()
-            .bouncyClick(0.97f, onClick = onClick)
+            .bouncyClick(0.97f, onLongClick = { sel.toggle(song.id) }) { if (sel.active) sel.toggle(song.id) else onClick() }
             .clip(RoundedCornerShape(22.dp))
             .background(bg)
             .padding(8.dp),
@@ -602,10 +690,14 @@ private fun SongRow(
                 maxLines = 1, overflow = TextOverflow.Ellipsis,
             )
         }
-        AnimatedVisibility(visible = isCurrent, enter = scaleIn(Motion.soft()) + fadeIn(Motion.soft()), exit = scaleOut(Motion.soft()) + fadeOut(Motion.soft())) {
-            EqualizerBars(isPlaying, Modifier.padding(horizontal = 8.dp))
+        if (sel.active) {
+            Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) { CheckDot(selected) }
+        } else {
+            AnimatedVisibility(visible = isCurrent, enter = scaleIn(Motion.soft()) + fadeIn(Motion.soft()), exit = scaleOut(Motion.soft()) + fadeOut(Motion.soft())) {
+                EqualizerBars(isPlaying, Modifier.padding(horizontal = 8.dp))
+            }
+            SongMenuButton(song, isFav, actions)
         }
-        SongMenuButton(song, isFav, actions)
     }
 }
 

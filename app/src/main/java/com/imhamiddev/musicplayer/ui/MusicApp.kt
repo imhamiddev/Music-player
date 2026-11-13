@@ -112,6 +112,7 @@ fun MusicApp(vm: MainViewModel) {
 
     var statsOpen by rememberSaveable { mutableStateOf(false) }
     var settingsOpen by rememberSaveable { mutableStateOf(false) }
+    var soundOpen by rememberSaveable { mutableStateOf(false) }
 
     var granted by remember { mutableStateOf(hasAudioPermission(ctx)) }
     var denied by remember { mutableStateOf(false) }
@@ -125,7 +126,7 @@ fun MusicApp(vm: MainViewModel) {
     var pendingDelete by remember { mutableStateOf<Song?>(null) }
     var askFullScreen by remember { mutableStateOf(false) }
     // Category dialogs. nameDialog: null = closed; id 0 = create (optionally with a first song), else rename that id.
-    var pickerTarget by remember { mutableStateOf<Song?>(null) }
+    var pickerTarget by remember { mutableStateOf<Set<Long>?>(null) }
     var nameDialog by remember { mutableStateOf<Pair<Long, String>?>(null) }
     var deleteCatId by remember { mutableStateOf<Long?>(null) }
     var addSongsCatId by remember { mutableStateOf<Long?>(null) }
@@ -188,7 +189,7 @@ fun MusicApp(vm: MainViewModel) {
     val actions = remember(vm) {
         SongActions(
             onToggleFav = { vm.toggleFavorite(it.id) },
-            onAddToCategory = { pickerTarget = it },
+            onAddToCategory = { pickerTarget = setOf(it.id) },
             onPlayNext = { vm.playNext(it) },
             onRename = { renameTarget = it },
             onShare = { shareSong(ctx, it) },
@@ -203,6 +204,9 @@ fun MusicApp(vm: MainViewModel) {
             onRename = { nameDialog = it.id to it.name },
             onDelete = { deleteCatId = it.id },
             onAddSongs = { addSongsCatId = it.id },
+            onAddSelected = { pickerTarget = it },
+            onRemoveSelected = { c, ids -> vm.removeSongsFromCategory(c.id, ids) },
+            onFavoriteSelected = { vm.addToFavorites(it) },
         )
     }
 
@@ -295,6 +299,7 @@ fun MusicApp(vm: MainViewModel) {
                     onShuffle = vm::toggleShuffle,
                     onRepeat = vm::cycleRepeat,
                     onFav = { vm.toggleFavorite(song.id) },
+                    onOpenSound = { soundOpen = true },
                 )
             }
         }
@@ -319,13 +324,23 @@ fun MusicApp(vm: MainViewModel) {
                 onLanguage = vm::setLanguage,
                 onProgressStyle = vm::setProgressStyle,
                 onTheme = vm::setThemeMode,
+                onOpenSound = { soundOpen = true },
                 onClose = { settingsOpen = false },
             )
+        }
+
+        AnimatedVisibility(
+            visible = soundOpen,
+            enter = slideInVertically(Motion.soft()) { it / 3 } + fadeIn(tween(260, easing = Motion.Silk)),
+            exit = slideOutVertically(tween(300, easing = Motion.Silk)) { it / 3 } + fadeOut(tween(220, easing = Motion.Silk)),
+        ) {
+            SoundScreen(onClose = { soundOpen = false })
         }
         // Registered after the library's own handler so they take priority while they are open.
         BackHandler(enabled = playerOpen) { playerOpen = false }
         BackHandler(enabled = statsOpen) { statsOpen = false }
         BackHandler(enabled = settingsOpen) { settingsOpen = false }
+        BackHandler(enabled = soundOpen) { soundOpen = false }
     }
 
     val rn = rememberHeld(renameTarget)
@@ -336,13 +351,15 @@ fun MusicApp(vm: MainViewModel) {
         }
     }
     val picker = rememberHeld(pickerTarget)
-    picker?.let { song ->
+    picker?.let { ids ->
         CategoryPickerDialog(
-            song = song,
+            songIds = ids,
             categories = categories,
             visible = pickerTarget != null,
-            onToggle = { c -> vm.toggleSongInCategory(c.id, song.id) },
-            onCreate = { name -> vm.createCategory(name, song.id) },
+            onToggle = { c ->
+                if (c.songIds.containsAll(ids)) vm.removeSongsFromCategory(c.id, ids) else vm.addSongsToCategory(c.id, ids)
+            },
+            onCreate = { name -> vm.createCategory(name, ids.toList()) },
             onDismiss = { pickerTarget = null },
         )
     }
