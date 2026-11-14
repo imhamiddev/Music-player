@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.animation.ExperimentalSharedTransitionApi::class)
+
 package com.imhamiddev.musicplayer.ui
 
 import android.Manifest
@@ -14,6 +16,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
@@ -48,6 +51,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -248,6 +252,9 @@ fun MusicApp(vm: MainViewModel) {
         label = "bannerPush",
     )
 
+    SharedTransitionLayout(Modifier.fillMaxSize()) {
+    val sharedScope = this
+    CompositionLocalProvider(LocalSharedScope provides sharedScope) {
     Box(Modifier.fillMaxSize().background(Ui.Bg)) {
         LibraryScreen(
             songs = songs,
@@ -287,25 +294,35 @@ fun MusicApp(vm: MainViewModel) {
             enter = slideInVertically(Motion.soft()) { it } + fadeIn(Motion.soft()),
             exit = slideOutVertically(Motion.soft()) { it } + fadeOut(Motion.soft()),
         ) {
-            current?.let {
-                MiniPlayer(
-                    song = it,
-                    isPlaying = isPlaying,
-                    positionFlow = vm.positionMs,
-                    durationFlow = vm.durationMs,
-                    onToggle = vm::togglePlay,
-                    onNext = vm::next,
-                    onOpen = { playerOpen = true },
-                    modifier = Modifier.navigationBarsPadding().padding(horizontal = 20.dp, vertical = 8.dp),
-                )
+            // Inner visibility: the bar hands over to the full player (shared elements) and comes back.
+            AnimatedVisibility(
+                visible = !playerOpen,
+                enter = fadeIn(tween(220, easing = Motion.Silk)),
+                exit = fadeOut(tween(160, easing = Motion.Silk)),
+            ) {
+                CompositionLocalProvider(LocalAnimScope provides this) {
+                    current?.let {
+                        MiniPlayer(
+                            song = it,
+                            isPlaying = isPlaying,
+                            positionFlow = vm.positionMs,
+                            durationFlow = vm.durationMs,
+                            onToggle = vm::togglePlay,
+                            onNext = vm::next,
+                            onOpen = { playerOpen = true },
+                            modifier = Modifier.navigationBarsPadding().padding(horizontal = 20.dp, vertical = 8.dp),
+                        )
+                    }
+                }
             }
         }
 
         AnimatedVisibility(
             visible = playerOpen && current != null,
-            enter = slideInVertically(Motion.soft()) { it } + fadeIn(tween(260, easing = Motion.Silk)),
-            exit = slideOutVertically(tween(364, easing = Motion.Silk)) { it } + fadeOut(tween(260, easing = Motion.Silk)),
+            enter = fadeIn(tween(300, easing = Motion.Silk)),
+            exit = fadeOut(tween(260, delayMillis = 60, easing = Motion.Silk)),
         ) {
+            CompositionLocalProvider(LocalAnimScope provides this) {
             current?.let { song ->
                 PlayerScreen(
                     song = song,
@@ -326,6 +343,7 @@ fun MusicApp(vm: MainViewModel) {
                     onFav = { vm.toggleFavorite(song.id) },
                     onOpenSound = { soundOpen = true },
                 )
+            }
             }
         }
 
@@ -368,6 +386,8 @@ fun MusicApp(vm: MainViewModel) {
         BackHandler(enabled = statsOpen) { statsOpen = false }
         BackHandler(enabled = settingsOpen) { settingsOpen = false }
         BackHandler(enabled = soundOpen) { soundOpen = false }
+    }
+    }
     }
 
     val rn = rememberHeld(renameTarget)
@@ -467,9 +487,12 @@ private fun MiniPlayer(
 ) {
     val str = LocalStrings.current
     val shape = RoundedCornerShape(26.dp)
+    val deckClip = rememberDeckClip()
+    val artClip = rememberArtClip()
     Column(
         modifier
             .fillMaxWidth()
+            .morphBounds("deck", deckClip)
             .bouncyClick(0.98f, onClick = onOpen)
             .shadow(20.dp, shape, ambientColor = Color.Black.copy(0.2f), spotColor = Color.Black.copy(0.3f))
             .clip(shape)
@@ -477,15 +500,15 @@ private fun MiniPlayer(
             .padding(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 9.dp),
     ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            AlbumArt(song, Modifier.size(42.dp), RoundedCornerShape(14.dp), 160)
+            AlbumArt(song, Modifier.size(42.dp).morphElement("art-${song.id}", artClip), RoundedCornerShape(14.dp), 160)
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
-                Text(song.title, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(song.title, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.morphBounds("title-${song.id}"))
                 Spacer(Modifier.height(1.dp))
-                Text(str.artist(song.artist), color = Color.White.copy(alpha = 0.6f), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(str.artist(song.artist), color = Color.White.copy(alpha = 0.6f), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.morphBounds("artist-${song.id}"))
             }
             Box(
-                Modifier.size(40.dp).bouncyClick(0.88f, onClick = onToggle).clip(CircleShape).background(Color.White),
+                Modifier.size(40.dp).morphBounds("play").bouncyClick(0.88f, onClick = onToggle).clip(CircleShape).background(Color.White),
                 contentAlignment = Alignment.Center,
             ) {
                 PlayPauseIcon(isPlaying, Ui.OnAccent, 24.dp)
