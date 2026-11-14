@@ -40,6 +40,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.material.icons.rounded.PushPin
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -110,6 +114,9 @@ class SongSelection(val ids: Set<Long>, val toggle: (Long) -> Unit) {
 
 val LocalSelection = compositionLocalOf { SongSelection(emptySet()) {} }
 
+/** Ids of the pinned songs, for the pin mark on a row and the Pin / Unpin menu entry. */
+val LocalPinned = compositionLocalOf<Set<Long>> { emptySet() }
+
 internal class EmptyInfo(val icon: ImageVector, val title: String, val body: String)
 
 @Composable
@@ -119,6 +126,7 @@ fun LibraryScreen(
     favorites: Set<Long>,
     recents: List<Long>,
     categories: List<Category>,
+    pinned: List<Long>,
     query: String,
     sortField: SortField,
     sortAsc: Boolean,
@@ -137,7 +145,9 @@ fun LibraryScreen(
     topInset: Dp = 0.dp,
 ) {
     val s = LocalStrings.current
-    var tab by rememberSaveable { mutableIntStateOf(0) }
+    val pagerState = rememberPagerState(initialPage = 0) { 5 }
+    val tab = pagerState.currentPage
+    val tabScope = rememberCoroutineScope()
     var openFolder by rememberSaveable { mutableStateOf<String?>(null) }
     var openCategory by rememberSaveable { mutableStateOf<Long?>(null) }
     var sortOpen by remember { mutableStateOf(false) }
@@ -161,7 +171,12 @@ fun LibraryScreen(
             }
         }
     }
-    val sorted = remember(matches, comparator) { matches.sortedWith(comparator) }
+    val pinnedSet = remember(pinned) { pinned.toSet() }
+    // Pinned songs go first in every list (in the chosen order), the rest follow.
+    val sorted = remember(matches, comparator, pinnedSet) {
+        val (top, rest) = matches.sortedWith(comparator).partition { it.id in pinnedSet }
+        top + rest
+    }
     val favs = remember(sorted, favorites) { sorted.filter { it.id in favorites } }
     val recentList = remember(matches, recents) {
         val byId = matches.associateBy { it.id }
@@ -240,7 +255,7 @@ fun LibraryScreen(
     val selection = SongSelection(selectedIds) { id ->
         selectedIds = if (id in selectedIds) selectedIds - id else selectedIds + id
     }
-    CompositionLocalProvider(LocalSelection provides selection) {
+    CompositionLocalProvider(LocalSelection provides selection, LocalPinned provides pinnedSet) {
     Column(Modifier.fillMaxSize().statusBarsPadding().padding(top = topInset)) {
         AnimatedContent(
             targetState = selecting,
@@ -302,7 +317,7 @@ fun LibraryScreen(
         SegmentedTabs(
             labels = listOf(s.tabAll, s.tabFolders, s.tabFavorite, s.tabRecent, s.tabCategories),
             selected = tab,
-            onSelect = { tab = it },
+            onSelect = { i -> tabScope.launch { pagerState.animateScrollToPage(i) } },
             modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 10.dp, bottom = 4.dp),
         )
 
@@ -310,14 +325,11 @@ fun LibraryScreen(
             if (!loaded) {
                 Skeleton()
             } else {
-                AnimatedContent(
-                    targetState = tab,
-                    transitionSpec = {
-                        val dir = if (targetState > initialState) 1 else -1
-                        (slideInHorizontally(tween(416, easing = Motion.Silk)) { dir * it / 5 } + fadeIn(tween(312, easing = Motion.Silk))) togetherWith
-                            (slideOutHorizontally(tween(260, easing = Motion.Silk)) { -dir * it / 6 } + fadeOut(tween(260, easing = Motion.Silk)))
-                    },
-                    label = "tabs",
+                // Swipe left / right (or tap a tab) to move between the pages.
+                HorizontalPager(
+                    state = pagerState,
+                    modifier = Modifier.fillMaxSize(),
+                    key = { it },
                 ) { t ->
                     when (t) {
                         0 -> SongList(
@@ -717,10 +729,16 @@ private fun SongRow(
         AlbumArt(song, Modifier.size(48.dp), RoundedCornerShape(14.dp), 160)
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Text(
-                song.title, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Ui.Ink,
-                maxLines = 1, overflow = TextOverflow.Ellipsis,
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    song.title, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Ui.Ink,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false),
+                )
+                if (song.id in LocalPinned.current) {
+                    Spacer(Modifier.width(6.dp))
+                    Icon(Icons.Rounded.PushPin, null, tint = Ui.GreenA, modifier = Modifier.size(14.dp))
+                }
+            }
             Spacer(Modifier.height(2.dp))
             Text(
                 "${s.artist(song.artist)}  \u00B7  ${s.time(song.durationMs)}", fontSize = 12.5.sp, color = Ui.Muted,
@@ -756,10 +774,11 @@ private fun FolderList(
         contentPadding = PaddingValues(start = 30.dp, end = 30.dp, top = 8.dp, bottom = bottomInset),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        items(folders, key = { it.path }) { g ->
+        itemsIndexed(folders, key = { _, g -> g.path }) { index, g ->
             Row(
                 Modifier
                     .animateItem(fadeInSpec = Motion.soft(), placementSpec = Motion.soft(), fadeOutSpec = Motion.soft())
+                    .staggeredAppear(index)
                     .fillMaxWidth()
                     .bouncyClick(0.97f, onLongClick = { onLongPress(g) }) { onOpen(g) }
                     .clip(RoundedCornerShape(22.dp))
