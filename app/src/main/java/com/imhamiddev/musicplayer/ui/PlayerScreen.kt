@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.animation.ExperimentalSharedTransitionApi::class)
+
 package com.imhamiddev.musicplayer.ui
 
 import androidx.compose.animation.AnimatedContent
@@ -97,6 +99,8 @@ fun PlayerScreen(
     onOpenSound: () -> Unit,
 ) {
     val str = LocalStrings.current
+    val deckClip = rememberDeckClip()
+    val artClip = rememberArtClip()
     val offsetY = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
     var heightPx by remember { mutableFloatStateOf(1f) }
@@ -137,7 +141,7 @@ fun PlayerScreen(
         ) {
             // Top bar
             Row(
-                Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 10.dp),
+                Modifier.fillMaxWidth().staggerIn(80, -40).padding(horizontal = 20.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 IconCircle(Icons.Rounded.KeyboardArrowDown, onClose, size = 44.dp, description = "Close")
@@ -164,6 +168,7 @@ fun PlayerScreen(
                     },
                     modifier = Modifier
                         .size(side)
+                        .morphElement("art-${song.id}", artClip)
                         .graphicsLayer { scaleX = artScale; scaleY = artScale }
                         .shadow(28.dp, RoundedCornerShape(40.dp), ambientColor = Color.Black.copy(0.12f), spotColor = Color.Black.copy(0.3f)),
                     label = "art",
@@ -179,9 +184,9 @@ fun PlayerScreen(
             ) {
                 Crossfade(song, modifier = Modifier.weight(1f), label = "title") { s ->
                     Column {
-                        Text(s.title, fontSize = 25.sp, fontWeight = FontWeight.Bold, color = Ui.Ink, letterSpacing = str.ls(s.title, (-0.6).sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(s.title, fontSize = 25.sp, fontWeight = FontWeight.Bold, color = Ui.Ink, letterSpacing = str.ls(s.title, (-0.6).sp), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.morphBounds("title-${s.id}"))
                         Spacer(Modifier.height(2.dp))
-                        Text(str.artist(s.artist), fontSize = 16.sp, color = Ui.Muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(str.artist(s.artist), fontSize = 16.sp, color = Ui.Muted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.morphBounds("artist-${s.id}"))
                     }
                 }
                 HeartButton(isFav, onFav, size = 48.dp)
@@ -193,6 +198,7 @@ fun PlayerScreen(
                 Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp)
+                    .morphBounds("deck", deckClip)
                     .clip(RoundedCornerShape(36.dp))
                     .background(Ui.Deck)
                     .padding(horizontal = 22.dp, vertical = 22.dp),
@@ -209,6 +215,7 @@ fun PlayerScreen(
                     Box(
                         Modifier
                             .size(76.dp)
+                            .morphBounds("play")
                             .bouncyClick(0.9f, onClick = onToggle)
                             .clip(CircleShape)
                             .background(Color.White),
