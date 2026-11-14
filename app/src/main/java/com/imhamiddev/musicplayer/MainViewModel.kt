@@ -74,6 +74,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _favorites = MutableStateFlow(prefs.favorites())
     val favorites: StateFlow<Set<Long>> = _favorites.asStateFlow()
 
+    private val _pinned = MutableStateFlow(prefs.pinned())
+    val pinned: StateFlow<List<Long>> = _pinned.asStateFlow()
+
     private val _categories = MutableStateFlow(prefs.categories())
     val categories: StateFlow<List<Category>> = _categories.asStateFlow()
 
@@ -344,11 +347,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _recents.value = rec
         prefs.saveRecents(rec)
         updateCategories { list -> list.map { c -> c.copy(songIds = c.songIds.filter { it !in ids }) } }
+        _pinned.value = _pinned.value.filter { it !in ids }
+        prefs.savePinned(_pinned.value)
         val titles = _titles.value - ids
         _titles.value = titles
         prefs.saveTitles(titles)
         _rawSongs.value = _rawSongs.value.filter { it.id !in ids }
         loadSongs()
+    }
+
+    fun togglePin(id: Long) {
+        val next = if (id in _pinned.value) _pinned.value - id else _pinned.value + id
+        _pinned.value = next
+        prefs.savePinned(next)
     }
 
     fun toggleFavorite(id: Long) {
@@ -379,18 +390,18 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Creates a category and returns its id, or null when the name is blank. */
-    fun createCategory(name: String, songIds: List<Long> = emptyList()): Long? {
+    fun createCategory(name: String, songIds: List<Long> = emptyList(), icon: String = "music"): Long? {
         val n = name.trim()
         if (n.isEmpty()) return null
         val id = System.currentTimeMillis()
-        updateCategories { it + Category(id, n, songIds.distinct()) }
+        updateCategories { it + Category(id, n, songIds.distinct(), icon) }
         return id
     }
 
-    fun renameCategory(id: Long, name: String) {
+    fun editCategory(id: Long, name: String, icon: String) {
         val n = name.trim()
         if (n.isEmpty()) return
-        updateCategories { list -> list.map { if (it.id == id) it.copy(name = n) else it } }
+        updateCategories { list -> list.map { if (it.id == id) it.copy(name = n, icon = icon) else it } }
     }
 
     fun deleteCategory(id: Long) = updateCategories { list -> list.filter { it.id != id } }

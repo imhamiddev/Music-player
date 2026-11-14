@@ -134,6 +134,9 @@ class Strings(val rtl: Boolean) {
 
     // ---- Song menu and dialogs -----------------------------------------------------------------
 
+    val pinToTop get() = t("Pin to top", "سنجاق به بالا")
+    val unpin get() = t("Unpin", "برداشتن سنجاق")
+    val chooseIcon get() = t("Icon", "آیکون")
     val playNext get() = t("Play next", "پخش بعدی")
     val addFav get() = t("Add to favorites", "افزودن به علاقه‌مندی‌ها")
     val removeFav get() = t("Remove from favorites", "حذف از علاقه‌مندی‌ها")

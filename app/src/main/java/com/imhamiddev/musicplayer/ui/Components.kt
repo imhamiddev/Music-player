@@ -118,6 +118,20 @@ fun fmt(ms: Long): String {
 // ---- Micro-interaction primitives ----------------------------------------------------------
 
 /** Springy press feedback + click, without ripple (matches the soft, tactile feel of the reference). */
+/** Fades a row in and lifts it a little, one after the other (rows past the first screenful just appear). */
+@Composable
+fun Modifier.staggeredAppear(index: Int): Modifier {
+    var shown by remember { mutableStateOf(index >= 12) }
+    LaunchedEffect(Unit) {
+        if (!shown) {
+            kotlinx.coroutines.delay(index * 30L)
+            shown = true
+        }
+    }
+    val a by animateFloatAsState(if (shown) 1f else 0f, tween(450, easing = Motion.Silk), label = "appear")
+    return this.graphicsLayer { alpha = a; translationY = (1f - a) * 26.dp.toPx() }
+}
+
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 fun Modifier.bouncyClick(
     pressedScale: Float = 0.92f,

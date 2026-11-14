@@ -112,6 +112,7 @@ fun MusicApp(vm: MainViewModel) {
     val progressStyle by vm.progressStyle.collectAsState()
     val stats by vm.stats.collectAsState()
     val categories by vm.categories.collectAsState()
+    val pinned by vm.pinned.collectAsState()
     val hiddenFolders by vm.hiddenFolders.collectAsState()
     val str = LocalStrings.current
 
@@ -132,7 +133,7 @@ fun MusicApp(vm: MainViewModel) {
     var askFullScreen by remember { mutableStateOf(false) }
     // Category dialogs. nameDialog: null = closed; id 0 = create (optionally with a first song), else rename that id.
     var pickerTarget by remember { mutableStateOf<Set<Long>?>(null) }
-    var nameDialog by remember { mutableStateOf<Pair<Long, String>?>(null) }
+    var nameDialog by remember { mutableStateOf<Triple<Long, String, String>?>(null) }
     var deleteCatId by remember { mutableStateOf<Long?>(null) }
     var addSongsCatId by remember { mutableStateOf<Long?>(null) }
 
@@ -217,6 +218,7 @@ fun MusicApp(vm: MainViewModel) {
     val actions = remember(vm) {
         SongActions(
             onToggleFav = { vm.toggleFavorite(it.id) },
+            onTogglePin = { vm.togglePin(it.id) },
             onAddToCategory = { pickerTarget = setOf(it.id) },
             onPlayNext = { vm.playNext(it) },
             onRename = { renameTarget = it },
@@ -228,8 +230,8 @@ fun MusicApp(vm: MainViewModel) {
 
     val catActions = remember {
         CategoryActions(
-            onNew = { nameDialog = 0L to "" },
-            onRename = { nameDialog = it.id to it.name },
+            onNew = { nameDialog = Triple(0L, "", "music") },
+            onRename = { nameDialog = Triple(it.id, it.name, it.icon) },
             onDelete = { deleteCatId = it.id },
             onAddSongs = { addSongsCatId = it.id },
             onAddSelected = { pickerTarget = it },
@@ -262,6 +264,7 @@ fun MusicApp(vm: MainViewModel) {
             favorites = favorites,
             recents = recents,
             categories = categories,
+            pinned = pinned,
             query = query,
             sortField = sortField,
             sortAsc = sortAsc,
@@ -411,15 +414,16 @@ fun MusicApp(vm: MainViewModel) {
         )
     }
     val nd = rememberHeld(nameDialog)
-    nd?.let { (id, initial) ->
+    nd?.let { (id, initial, initialIcon) ->
         CategoryNameDialog(
             title = if (id == 0L) str.newCategory else str.renameCategory,
             initial = initial,
+            initialIcon = initialIcon,
             confirmLabel = if (id == 0L) str.create else str.save,
             visible = nameDialog != null,
             onDismiss = { nameDialog = null },
-            onConfirm = { name ->
-                if (id == 0L) vm.createCategory(name) else vm.renameCategory(id, name)
+            onConfirm = { name, icon ->
+                if (id == 0L) vm.createCategory(name, icon = icon) else vm.editCategory(id, name, icon)
                 nameDialog = null
             },
         )

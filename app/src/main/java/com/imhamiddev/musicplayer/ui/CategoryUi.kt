@@ -27,6 +27,29 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.LibraryMusic
+import androidx.compose.material.icons.rounded.FitnessCenter
+import androidx.compose.material.icons.rounded.Headphones
+import androidx.compose.material.icons.rounded.Bedtime
+import androidx.compose.material.icons.rounded.DirectionsCar
+import androidx.compose.material.icons.rounded.Coffee
+import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material.icons.rounded.LocalFireDepartment
+import androidx.compose.material.icons.rounded.Celebration
+import androidx.compose.material.icons.rounded.Spa
+import androidx.compose.material.icons.rounded.MenuBook
+import androidx.compose.material.icons.rounded.School
+import androidx.compose.material.icons.rounded.Work
+import androidx.compose.material.icons.rounded.Nightlife
+import androidx.compose.material.icons.rounded.WbSunny
+import androidx.compose.material.icons.rounded.Bolt
+import androidx.compose.material.icons.rounded.SportsEsports
+import androidx.compose.material.icons.rounded.Piano
+import androidx.compose.material.icons.rounded.Mic
+import androidx.compose.material.icons.rounded.Park
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -59,6 +82,33 @@ class CategoryActions(
     val onFavoriteSelected: (Set<Long>) -> Unit,
 )
 
+/** Icons a category can use: stored by key, so renaming an icon in code never breaks saved lists. */
+val categoryIcons: List<Pair<String, ImageVector>> = listOf(
+    "music" to Icons.Rounded.LibraryMusic,
+    "gym" to Icons.Rounded.FitnessCenter,
+    "headphones" to Icons.Rounded.Headphones,
+    "sleep" to Icons.Rounded.Bedtime,
+    "car" to Icons.Rounded.DirectionsCar,
+    "coffee" to Icons.Rounded.Coffee,
+    "star" to Icons.Rounded.Star,
+    "fire" to Icons.Rounded.LocalFireDepartment,
+    "party" to Icons.Rounded.Celebration,
+    "calm" to Icons.Rounded.Spa,
+    "book" to Icons.Rounded.MenuBook,
+    "study" to Icons.Rounded.School,
+    "work" to Icons.Rounded.Work,
+    "night" to Icons.Rounded.Nightlife,
+    "sun" to Icons.Rounded.WbSunny,
+    "bolt" to Icons.Rounded.Bolt,
+    "game" to Icons.Rounded.SportsEsports,
+    "piano" to Icons.Rounded.Piano,
+    "mic" to Icons.Rounded.Mic,
+    "nature" to Icons.Rounded.Park,
+)
+
+fun categoryIcon(key: String): ImageVector =
+    categoryIcons.firstOrNull { it.first == key }?.second ?: Icons.Rounded.LibraryMusic
+
 // ---- List of categories (the "Lists" tab) -------------------------------------------------
 
 @Composable
@@ -79,6 +129,7 @@ fun CategoryList(
             Row(
                 Modifier
                     .animateItem(fadeInSpec = Motion.soft(), placementSpec = Motion.soft(), fadeOutSpec = Motion.soft())
+                    .staggeredAppear(0)
                     .fillMaxWidth()
                     .bouncyClick(0.97f, onClick = onNew)
                     .clip(RoundedCornerShape(22.dp))
@@ -100,10 +151,11 @@ fun CategoryList(
                 }
             }
         }
-        items(categories, key = { it.id }) { c ->
+        itemsIndexed(categories, key = { _, c -> c.id }) { index, c ->
             Row(
                 Modifier
                     .animateItem(fadeInSpec = Motion.soft(), placementSpec = Motion.soft(), fadeOutSpec = Motion.soft())
+                    .staggeredAppear(index + 1)
                     .fillMaxWidth()
                     .bouncyClick(0.97f) { onOpen(c) }
                     .clip(RoundedCornerShape(22.dp))
@@ -112,7 +164,7 @@ fun CategoryList(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Box(Modifier.size(48.dp).clip(RoundedCornerShape(14.dp)).background(Ui.Tile), contentAlignment = Alignment.Center) {
-                    Icon(Icons.Rounded.LibraryMusic, null, tint = Ui.Ink, modifier = Modifier.size(24.dp))
+                    Icon(categoryIcon(c.icon), null, tint = Ui.Ink, modifier = Modifier.size(24.dp))
                 }
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
@@ -151,20 +203,42 @@ private fun NameField(value: String, onValue: (String) -> Unit, hint: String, mo
 fun CategoryNameDialog(
     title: String,
     initial: String,
+    initialIcon: String,
     confirmLabel: String,
     visible: Boolean,
     onDismiss: () -> Unit,
-    onConfirm: (String) -> Unit,
+    onConfirm: (String, String) -> Unit,
 ) {
     val s = LocalStrings.current
     var text by remember(initial) { mutableStateOf(initial) }
+    var icon by remember(initialIcon) { mutableStateOf(initialIcon) }
     SoftAlertDialog(
         visible = visible,
         onDismissRequest = onDismiss,
         title = { Text(title, color = Ui.Ink, fontWeight = FontWeight.Bold) },
-        text = { NameField(text, { text = it }, s.categoryNameHint, Modifier.fillMaxWidth()) },
+        text = {
+            Column(Modifier.heightIn(max = 380.dp).verticalScroll(rememberScrollState())) {
+                NameField(text, { text = it }, s.categoryNameHint, Modifier.fillMaxWidth())
+                Spacer(Modifier.height(16.dp))
+                Text(s.chooseIcon, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Ui.Muted)
+                Spacer(Modifier.height(8.dp))
+                categoryIcons.chunked(5).forEach { rowIcons ->
+                    Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                        rowIcons.forEach { (key, vector) ->
+                            val picked = key == icon
+                            val bg by animateColorAsState(if (picked) Ui.GreenA else Ui.Tile, tween(260, easing = Motion.Silk), label = "iconbg")
+                            val fg by animateColorAsState(if (picked) Ui.OnAccent else Ui.Ink, tween(260, easing = Motion.Silk), label = "iconfg")
+                            Box(
+                                Modifier.size(46.dp).bouncyClick(0.88f) { icon = key }.clip(CircleShape).background(bg),
+                                contentAlignment = Alignment.Center,
+                            ) { Icon(vector, null, tint = fg, modifier = Modifier.size(22.dp)) }
+                        }
+                    }
+                }
+            }
+        },
         confirmButton = {
-            TextButton(onClick = { if (text.isNotBlank()) onConfirm(text) }) {
+            TextButton(onClick = { if (text.isNotBlank()) onConfirm(text, icon) }) {
                 Text(confirmLabel, color = if (text.isBlank()) Ui.Muted else Ui.Ink, fontWeight = FontWeight.SemiBold)
             }
         },
@@ -227,6 +301,8 @@ fun CategoryPickerDialog(
                                     .padding(horizontal = 8.dp, vertical = 10.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
+                                Icon(categoryIcon(c.icon), null, tint = Ui.Muted, modifier = Modifier.size(20.dp))
+                                Spacer(Modifier.width(10.dp))
                                 Text(
                                     c.name, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = Ui.Ink,
                                     maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),

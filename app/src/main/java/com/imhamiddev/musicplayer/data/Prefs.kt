@@ -17,6 +17,10 @@ class Prefs(context: Context) {
     fun favorites(): Set<Long> = readIds("favorites").toSet()
     fun saveFavorites(ids: Set<Long>) = writeIds("favorites", ids)
 
+    /** Pinned songs, oldest pin first. */
+    fun pinned(): List<Long> = readIds("pinned")
+    fun savePinned(ids: List<Long>) = writeIds("pinned", ids)
+
     fun recents(): List<Long> = readIds("recents")
     fun saveRecents(ids: List<Long>) = writeIds("recents", ids)
 
@@ -70,7 +74,7 @@ class Prefs(context: Context) {
         (0 until arr.length()).map { i ->
             val o = arr.getJSONObject(i)
             val ids = o.getJSONArray("songs")
-            Category(o.getLong("id"), o.getString("name"), (0 until ids.length()).map { ids.getLong(it) })
+            Category(o.getLong("id"), o.getString("name"), (0 until ids.length()).map { ids.getLong(it) }, o.optString("icon", "music"))
         }
     }.getOrDefault(emptyList())
 
@@ -81,7 +85,8 @@ class Prefs(context: Context) {
                 JSONObject()
                     .put("id", c.id)
                     .put("name", c.name)
-                    .put("songs", JSONArray(c.songIds)),
+                    .put("songs", JSONArray(c.songIds))
+                    .put("icon", c.icon),
             )
         }
         sp.edit().putString("categories", arr.toString()).apply()
