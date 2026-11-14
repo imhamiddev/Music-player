@@ -6,6 +6,7 @@ import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.BoundsTransform
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.core.VisibilityThreshold
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -102,12 +103,12 @@ fun Modifier.morphElement(key: Any, clip: SharedTransitionScope.OverlayClip? = n
         val state = rememberSharedContentState(key)
         if (clip != null) {
             this@morphElement.sharedElement(
-                sharedContentState = state, animatedVisibilityScope = anim,
+                state = state, animatedVisibilityScope = anim,
                 boundsTransform = morphSpring, clipInOverlayDuringTransition = clip,
             )
         } else {
             this@morphElement.sharedElement(
-                sharedContentState = state, animatedVisibilityScope = anim, boundsTransform = morphSpring,
+                state = state, animatedVisibilityScope = anim, boundsTransform = morphSpring,
             )
         }
     }
